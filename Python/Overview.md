@@ -1,12 +1,11 @@
 # LangGraph 概述
 
-<Callout icon="bullhorn" color="#DFC5FE" iconType="regular">
-  **LangGraph v1.0 现已发布！**
 
-  如需查看完整的变更列表和升级代码的说明，请参阅[发布说明](/oss/python/releases/langgraph-v1)和[迁移指南](/oss/python/migrate/langgraph-v1)。
+**LangGraph v1.0 现已发布！**
 
-  如果您遇到任何问题或有反馈意见，请[创建问题](https://github.com/langchain-ai/docs/issues/new?template=02-langgraph.yml\&labels=langgraph,python)，以便我们改进。要查看 v0.x 文档，请[前往归档内容](https://github.com/langchain-ai/langgraph/tree/main/docs/docs)。
-</Callout>
+如需查看完整的变更列表和升级代码的说明，请参阅[发布说明](/oss/python/releases/langgraph-v1)和[迁移指南](/oss/python/migrate/langgraph-v1)。
+
+如果您遇到任何问题或有反馈意见，请[创建问题](https://github.com/langchain-ai/docs/issues/new?template=02-langgraph.yml\&labels=langgraph,python)，以便我们改进。要查看 v0.x 文档，请[前往归档内容](https://github.com/langchain-ai/langgraph/tree/main/docs/docs)。
 
 受到塑造代理未来的公司（包括 Klarna、Replit、Elastic 等）的信赖，LangGraph 是一个用于构建、管理和部署长时间运行、有状态代理的低级编排框架和运行时。
 
@@ -16,7 +15,7 @@ LangGraph 是非常低级的，完全专注于代理**编排**。在使用 LangG
 
 LangGraph 专注于代理编排重要的底层能力：持久执行、流式传输、人工干预等。
 
-## <Icon icon="download" size={20} /> 安装
+## 安装
 
 
 ```bash
