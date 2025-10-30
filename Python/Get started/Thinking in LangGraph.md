@@ -217,76 +217,74 @@ class EmailAgentState(TypedDict):
 | 用户可修复的错误（缺少信息、不明确的指令） | 人类              | 使用`interrupt()`暂停                       | 需要用户输入才能继续                       |
 | 意外错误                                               | 开发人员          | 让它们冒泡                 | 需要调试的未知问题               |
 
-<Tabs>
-  <Tab title="暂时性错误" icon="rotate">
-    添加重试策略以自动重试网络问题和速率限制：
+- **暂时性错误:**
+添加重试策略以自动重试网络问题和速率限制：
 
-    ```python
-    from langgraph.types import RetryPolicy
+```python
+from langgraph.types import RetryPolicy
 
-    workflow.add_node(
-        "search_documentation",
-        search_documentation,
-        retry_policy=RetryPolicy(max_attempts=3, initial_interval=1.0)
-    )
-    ```
-  </Tab>
+workflow.add_node(
+    "search_documentation",
+    search_documentation,
+    retry_policy=RetryPolicy(max_attempts=3, initial_interval=1.0)
+)
+```
 
-  <Tab title="LLM可恢复" icon="brain">
-    将错误存储在状态中并循环回来，以便LLM可以看到出了什么问题并重试：
+  
+- **LLM可恢复:**
+将错误存储在状态中并循环回来，以便LLM可以看到出了什么问题并重试：
 
-    ```python
-    from langgraph.types import Command
-
-
-    def execute_tool(state: State) -> Command[Literal["agent", "execute_tool"]]:
-        try:
-            result = run_tool(state['tool_call'])
-            return Command(update={"tool_result": result}, goto="agent")
-        except ToolError as e:
-            # 让LLM看到出了什么问题并重试
-            return Command(
-                update={"tool_result": f"工具错误: {str(e)}"},
-                goto="agent"
-            )
-    ```
-  </Tab>
-
-  <Tab title="用户可修复" icon="user">
-    当需要时暂停并从用户那里收集信息（如账户ID、订单号或澄清）：
-
-    ```python
-    from langgraph.types import Command
+```python
+from langgraph.types import Command
 
 
-    def lookup_customer_history(state: State) -> Command[Literal["draft_response"]]:
-        if not state.get('customer_id'):
-            user_input = interrupt({
-                "message": "需要客户ID",
-                "request": "请提供客户的账户ID以查找其订阅历史"
-            })
-            return Command(
-                update={"customer_id": user_input['customer_id']},
-                goto="lookup_customer_history"
-            )
-        # 现在进行查找
-        customer_data = fetch_customer_history(state['customer_id'])
-        return Command(update={"customer_history": customer_data}, goto="draft_response")
-    ```
-  </Tab>
+def execute_tool(state: State) -> Command[Literal["agent", "execute_tool"]]:
+    try:
+        result = run_tool(state['tool_call'])
+        return Command(update={"tool_result": result}, goto="agent")
+    except ToolError as e:
+        # 让LLM看到出了什么问题并重试
+        return Command(
+            update={"tool_result": f"工具错误: {str(e)}"},
+            goto="agent"
+        )
+```
 
-  <Tab title="意外" icon="triangle-exclamation">
-    让它们冒泡以进行调试。不要捕获您无法处理的内容：
+- **用户可修复:**
 
-    ```python
-    def send_reply(state: EmailAgentState):
-        try:
-            email_service.send(state["draft_response"])
-        except Exception:
-            raise  # 显示意外错误
-    ```
-  </Tab>
-</Tabs>
+当需要时暂停并从用户那里收集信息（如账户ID、订单号或澄清）：
+
+```python
+ from langgraph.types import Command
+
+
+ def lookup_customer_history(state: State) -> Command[Literal["draft_response"]]:
+     if not state.get('customer_id'):
+         user_input = interrupt({
+             "message": "需要客户ID",
+             "request": "请提供客户的账户ID以查找其订阅历史"
+         })
+         return Command(
+             update={"customer_id": user_input['customer_id']},
+             goto="lookup_customer_history"
+         )
+     # 现在进行查找
+     customer_data = fetch_customer_history(state['customer_id'])
+     return Command(update={"customer_history": customer_data}, goto="draft_response")
+ ```
+
+
+- **意外:**
+
+让它们冒泡以进行调试。不要捕获您无法处理的内容：
+
+```python
+def send_reply(state: EmailAgentState):
+    try:
+        email_service.send(state["draft_response"])
+    except Exception:
+        raise  # 显示意外错误
+```
 
 ### 实现我们的邮件Agent节点
 
