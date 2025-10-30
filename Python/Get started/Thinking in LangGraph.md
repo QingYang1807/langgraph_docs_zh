@@ -251,7 +251,6 @@ def execute_tool(state: State) -> Command[Literal["agent", "execute_tool"]]:
 ```
 
 - **用户可修复:**
-
 当需要时暂停并从用户那里收集信息（如账户ID、订单号或澄清）：
 
 ```python
@@ -275,7 +274,6 @@ def execute_tool(state: State) -> Command[Literal["agent", "execute_tool"]]:
 
 
 - **意外:**
-
 让它们冒泡以进行调试。不要捕获您无法处理的内容：
 
 ```python
