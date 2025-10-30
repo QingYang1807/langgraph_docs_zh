@@ -22,7 +22,7 @@
 2. 配置中的**线程ID**，以便运行时知道从哪个状态恢复
 3. 在要暂停的位置调用`interrupt()`（负载必须是可JSON序列化的）
 
-```python  theme={null}
+```python
 from langgraph.types import interrupt
 
 def approval_node(state: State):
@@ -45,7 +45,7 @@ def approval_node(state: State):
 
 在中断暂停执行后，您通过使用包含恢复值的`Command`再次调用图来恢复它。恢复值被传回给`interrupt`调用，允许节点使用外部输入继续执行。
 
-```python  theme={null}
+```python
 from langgraph.types import Command
 
 # 初始运行 - 触发中断并暂停
@@ -83,7 +83,7 @@ graph.invoke(Command(resume=True), config=config)
 
 中断最常见的用途之一是在关键操作之前暂停并请求批准。例如，您可能希望要求人类批准API调用、数据库更改或任何其他重要决策。
 
-```python  theme={null}
+```python
 from typing import Literal
 from langgraph.types import interrupt, Command
 
@@ -103,7 +103,7 @@ def approval_node(state: State) -> Command[Literal["proceed", "cancel"]]:
 
 当您恢复图时，传递`true`表示批准，`false`表示拒绝：
 
-```python  theme={null}
+```python
 # 批准
 graph.invoke(Command(resume=True), config=config)
 
@@ -111,72 +111,71 @@ graph.invoke(Command(resume=True), config=config)
 graph.invoke(Command(resume=False), config=config)
 ```
 
-<Accordion title="完整示例">
-  ```python  theme={null}
-  import sqlite3
-  from typing import Literal, Optional, TypedDict
+**完整示例**
+```python
+import sqlite3
+from typing import Literal, Optional, TypedDict
 
-  from langgraph.checkpoint.memory import MemorySaver
-  from langgraph.graph import StateGraph, START, END
-  from langgraph.types import Command, interrupt
-
-
-  class ApprovalState(TypedDict):
-      action_details: str
-      status: Optional[Literal["pending", "approved", "rejected"]]
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import StateGraph, START, END
+from langgraph.types import Command, interrupt
 
 
-  def approval_node(state: ApprovalState) -> Command[Literal["proceed", "cancel"]]:
-      # 公开详细信息，以便调用者可以在UI中呈现它们
-      decision = interrupt({
-          "question": "批准此操作？",
-          "details": state["action_details"],
-      })
-
-      # 恢复后路由到适当的节点
-      return Command(goto="proceed" if decision else "cancel")
+class ApprovalState(TypedDict):
+    action_details: str
+    status: Optional[Literal["pending", "approved", "rejected"]]
 
 
-  def proceed_node(state: ApprovalState):
-      return {"status": "approved"}
+def approval_node(state: ApprovalState) -> Command[Literal["proceed", "cancel"]]:
+    # 公开详细信息，以便调用者可以在UI中呈现它们
+    decision = interrupt({
+        "question": "批准此操作？",
+        "details": state["action_details"],
+    })
+
+    # 恢复后路由到适当的节点
+    return Command(goto="proceed" if decision else "cancel")
 
 
-  def cancel_node(state: ApprovalState):
-      return {"status": "rejected"}
+def proceed_node(state: ApprovalState):
+    return {"status": "approved"}
 
 
-  builder = StateGraph(ApprovalState)
-  builder.add_node("approval", approval_node)
-  builder.add_node("proceed", proceed_node)
-  builder.add_node("cancel", cancel_node)
-  builder.add_edge(START, "approval")
-  builder.add_edge("approval", "proceed")
-  builder.add_edge("approval", "cancel")
-  builder.add_edge("proceed", END)
-  builder.add_edge("cancel", END)
+def cancel_node(state: ApprovalState):
+    return {"status": "rejected"}
 
-  # 在生产环境中使用更持久的检查点
-  checkpointer = MemorySaver()
-  graph = builder.compile(checkpointer=checkpointer)
 
-  config = {"configurable": {"thread_id": "approval-123"}}
-  initial = graph.invoke(
-      {"action_details": "转账$500", "status": "pending"},
-      config=config,
-  )
-  print(initial["__interrupt__"])  # -> [Interrupt(value={'question': ..., 'details': ...})]
+builder = StateGraph(ApprovalState)
+builder.add_node("approval", approval_node)
+builder.add_node("proceed", proceed_node)
+builder.add_node("cancel", cancel_node)
+builder.add_edge(START, "approval")
+builder.add_edge("approval", "proceed")
+builder.add_edge("approval", "cancel")
+builder.add_edge("proceed", END)
+builder.add_edge("cancel", END)
 
-  # 使用决策恢复；True路由到proceed，False路由到cancel
-  resumed = graph.invoke(Command(resume=True), config=config)
-  print(resumed["status"])  # -> "approved"
-  ```
-</Accordion>
+# 在生产环境中使用更持久的检查点
+checkpointer = MemorySaver()
+graph = builder.compile(checkpointer=checkpointer)
+
+config = {"configurable": {"thread_id": "approval-123"}}
+initial = graph.invoke(
+    {"action_details": "转账$500", "status": "pending"},
+    config=config,
+)
+print(initial["__interrupt__"])  # -> [Interrupt(value={'question': ..., 'details': ...})]
+
+# 使用决策恢复；True路由到proceed，False路由到cancel
+resumed = graph.invoke(Command(resume=True), config=config)
+print(resumed["status"])  # -> "approved"
+```
 
 ### 审查和编辑状态
 
 有时您希望让人类在继续之前审查和编辑图状态的一部分。这对于纠正LLM、添加缺失信息或进行调整很有用。
 
-```python  theme={null}
+```python
 from langgraph.types import interrupt
 
 def review_node(state: State):
@@ -192,56 +191,55 @@ def review_node(state: State):
 
 恢复时，提供编辑后的内容：
 
-```python  theme={null}
+```python
 graph.invoke(
     Command(resume="经过编辑和改进的文本"),  # 值成为interrupt()的返回值
     config=config
 )
 ```
 
-<Accordion title="完整示例">
-  ```python  theme={null}
-  import sqlite3
-  from typing import TypedDict
+**完整示例**
+```python
+import sqlite3
+from typing import TypedDict
 
-  from langgraph.checkpoint.memory import MemorySaver
-  from langgraph.graph import StateGraph, START, END
-  from langgraph.types import Command, interrupt
-
-
-  class ReviewState(TypedDict):
-      generated_text: str
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import StateGraph, START, END
+from langgraph.types import Command, interrupt
 
 
-  def review_node(state: ReviewState):
-      # 请求审查者编辑生成的内容
-      updated = interrupt({
-          "instruction": "审查并编辑此内容",
-          "content": state["generated_text"],
-      })
-      return {"generated_text": updated}
+class ReviewState(TypedDict):
+    generated_text: str
 
 
-  builder = StateGraph(ReviewState)
-  builder.add_node("review", review_node)
-  builder.add_edge(START, "review")
-  builder.add_edge("review", END)
+def review_node(state: ReviewState):
+    # 请求审查者编辑生成的内容
+    updated = interrupt({
+        "instruction": "审查并编辑此内容",
+        "content": state["generated_text"],
+    })
+    return {"generated_text": updated}
 
-  checkpointer = MemorySaver()
-  graph = builder.compile(checkpointer=checkpointer)
 
-  config = {"configurable": {"thread_id": "review-42"}}
-  initial = graph.invoke({"generated_text": "初始草稿"}, config=config)
-  print(initial["__interrupt__"])  # -> [Interrupt(value={'instruction': ..., 'content': ...})]
+builder = StateGraph(ReviewState)
+builder.add_node("review", review_node)
+builder.add_edge(START, "review")
+builder.add_edge("review", END)
 
-  # 使用审查者编辑的文本恢复
-  final_state = graph.invoke(
-      Command(resume="经过审查后改进的草稿"),
-      config=config,
-  )
-  print(final_state["generated_text"])  # -> "经过审查后改进的草稿"
-  ```
-</Accordion>
+checkpointer = MemorySaver()
+graph = builder.compile(checkpointer=checkpointer)
+
+config = {"configurable": {"thread_id": "review-42"}}
+initial = graph.invoke({"generated_text": "初始草稿"}, config=config)
+print(initial["__interrupt__"])  # -> [Interrupt(value={'instruction': ..., 'content': ...})]
+
+# 使用审查者编辑的文本恢复
+final_state = graph.invoke(
+    Command(resume="经过审查后改进的草稿"),
+    config=config,
+)
+print(final_state["generated_text"])  # -> "经过审查后改进的草稿"
+```
 
 ### 工具中的中断
 
@@ -249,7 +247,7 @@ graph.invoke(
 
 首先，定义一个使用[`interrupt`](https://reference.langchain.com/python/langgraph/types/#langgraph.types.interrupt)的工具：
 
-```python  theme={null}
+```python
 from langchain.tools import tool
 from langgraph.types import interrupt
 
@@ -277,89 +275,88 @@ def send_email(to: str, subject: str, body: str):
 
 当您希望批准逻辑与工具本身一起存在时，这种方法很有用，使它在图的不同部分可重用。LLM可以自然地调用工具，并且每当调用工具时，中断都会暂停执行，允许您批准、编辑或取消操作。
 
-<Accordion title="完整示例">
-  ```python  theme={null}
-  import sqlite3
-  from typing import TypedDict
+**完整示例**
+```python
+import sqlite3
+from typing import TypedDict
 
-  from langchain.tools import tool
-  from langchain_anthropic import ChatAnthropic
-  from langgraph.checkpoint.sqlite import SqliteSaver
-  from langgraph.graph import StateGraph, START, END
-  from langgraph.types import Command, interrupt
-
-
-  class AgentState(TypedDict):
-      messages: list[dict]
+from langchain.tools import tool
+from langchain_anthropic import ChatAnthropic
+from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.graph import StateGraph, START, END
+from langgraph.types import Command, interrupt
 
 
-  @tool
-  def send_email(to: str, subject: str, body: str):
-      """向收件人发送电子邮件。"""
-
-      # 发送前暂停；负载在result["__interrupt__"]中显示
-      response = interrupt({
-          "action": "send_email",
-          "to": to,
-          "subject": subject,
-          "body": body,
-          "message": "批准发送此电子邮件？",
-      })
-
-      if response.get("action") == "approve":
-          final_to = response.get("to", to)
-          final_subject = response.get("subject", subject)
-          final_body = response.get("body", body)
-
-          # 实际发送电子邮件（您的实现在这里）
-          print(f"[send_email] to={final_to} subject={final_subject} body={final_body}")
-          return f"电子邮件已发送至{final_to}"
-
-      return "用户取消了电子邮件"
+class AgentState(TypedDict):
+    messages: list[dict]
 
 
-  model = ChatAnthropic(model="claude-sonnet-4-5").bind_tools([send_email])
+@tool
+def send_email(to: str, subject: str, body: str):
+    """向收件人发送电子邮件。"""
+
+    # 发送前暂停；负载在result["__interrupt__"]中显示
+    response = interrupt({
+        "action": "send_email",
+        "to": to,
+        "subject": subject,
+        "body": body,
+        "message": "批准发送此电子邮件？",
+    })
+
+    if response.get("action") == "approve":
+        final_to = response.get("to", to)
+        final_subject = response.get("subject", subject)
+        final_body = response.get("body", body)
+
+        # 实际发送电子邮件（您的实现在这里）
+        print(f"[send_email] to={final_to} subject={final_subject} body={final_body}")
+        return f"电子邮件已发送至{final_to}"
+
+    return "用户取消了电子邮件"
 
 
-  def agent_node(state: AgentState):
-      # LLM可能决定调用工具；中断在发送前暂停
-      result = model.invoke(state["messages"])
-      return {"messages": state["messages"] + [result]}
+model = ChatAnthropic(model="claude-sonnet-4-5").bind_tools([send_email])
 
 
-  builder = StateGraph(AgentState)
-  builder.add_node("agent", agent_node)
-  builder.add_edge(START, "agent")
-  builder.add_edge("agent", END)
+ def agent_node(state: AgentState):
+    # LLM可能决定调用工具；中断在发送前暂停
+    result = model.invoke(state["messages"])
+    return {"messages": state["messages"] + [result]}
 
-  checkpointer = SqliteSaver(sqlite3.connect("tool-approval.db"))
-  graph = builder.compile(checkpointer=checkpointer)
 
-  config = {"configurable": {"thread_id": "email-workflow"}}
-  initial = graph.invoke(
-      {
-          "messages": [
-              {"role": "user", "content": "发送一封关于会议的电子邮件给alice@example.com"}
-          ]
-      },
-      config=config,
-  )
-  print(initial["__interrupt__"])  # -> [Interrupt(value={'action': 'send_email', ...})]
+builder = StateGraph(AgentState)
+builder.add_node("agent", agent_node)
+builder.add_edge(START, "agent")
+builder.add_edge("agent", END)
 
-  # 使用批准和可选编辑的参数恢复
-  resumed = graph.invoke(
-      Command(resume={"action": "approve", "subject": "更新的主题"}),
-      config=config,
-  )
-  print(resumed["messages"][-1])  # -> send_email返回的工具结果
-  ```
-</Accordion>
+checkpointer = SqliteSaver(sqlite3.connect("tool-approval.db"))
+graph = builder.compile(checkpointer=checkpointer)
+
+config = {"configurable": {"thread_id": "email-workflow"}}
+initial = graph.invoke(
+    {
+        "messages": [
+            {"role": "user", "content": "发送一封关于会议的电子邮件给alice@example.com"}
+        ]
+    },
+    config=config,
+)
+print(initial["__interrupt__"])  # -> [Interrupt(value={'action': 'send_email', ...})]
+
+# 使用批准和可选编辑的参数恢复
+resumed = graph.invoke(
+    Command(resume={"action": "approve", "subject": "更新的主题"}),
+    config=config,
+)
+print(resumed["messages"][-1])  # -> send_email返回的工具结果
+```
 
 ### 验证人类输入
 
 有时您需要验证来自人类的输入，如果无效则再次询问。您可以使用循环中的多个[`interrupt`](https://reference.langchain.com/python/langgraph/types/#langgraph.types.interrupt)调用来做到这一点。
 
-```python  theme={null}
+```python
 from langgraph.types import interrupt
 
 def get_age_node(state: State):
@@ -381,53 +378,50 @@ def get_age_node(state: State):
 
 每次您使用无效输入恢复图时，它会以更清晰的消息再次询问。一旦提供了有效输入，节点完成并继续图执行。
 
-<Accordion title="完整示例">
-  ```python  theme={null}
-  import sqlite3
-  from typing import TypedDict
+**完整示例**
 
-  from langgraph.checkpoint.sqlite import SqliteSaver
-  from langgraph.graph import StateGraph, START, END
-  from langgraph.types import Command, interrupt
+```python
+import sqlite3
+from typing import TypedDict
 
-
-  class FormState(TypedDict):
-      age: int | None
+from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.graph import StateGraph, START, END
+from langgraph.types import Command, interrupt
 
 
-  def get_age_node(state: FormState):
-      prompt = "您的年龄是多少？"
-
-      while True:
-          answer = interrupt(prompt)  # 负载在result["__interrupt__"]中显示
-
-          if isinstance(answer, int) and answer > 0:
-              return {"age": answer}
-
-          prompt = f"'{answer}'不是有效的年龄。请输入一个正数。"
+class FormState(TypedDict):
+    age: int | None
 
 
-  builder = StateGraph(FormState)
-  builder.add_node("collect_age", get_age_node)
-  builder.add_edge(START, "collect_age")
-  builder.add_edge("collect_age", END)
+def get_age_node(state: FormState):
+    prompt = "您的年龄是多少？"
+    while True:
+        answer = interrupt(prompt)  # 负载在result["__interrupt__"]中显示
+        if isinstance(answer, int) and answer > 0:
+            return {"age": answer}
+        prompt = f"'{answer}'不是有效的年龄。请输入一个正数。"
 
-  checkpointer = SqliteSaver(sqlite3.connect("forms.db"))
-  graph = builder.compile(checkpointer=checkpointer)
 
-  config = {"configurable": {"thread_id": "form-1"}}
-  first = graph.invoke({"age": None}, config=config)
-  print(first["__interrupt__"])  # -> [Interrupt(value='您的年龄是多少？', ...)]
+builder = StateGraph(FormState)
+builder.add_node("collect_age", get_age_node)
+builder.add_edge(START, "collect_age")
+builder.add_edge("collect_age", END)
 
-  # 提供无效数据；节点会重新提示
-  retry = graph.invoke(Command(resume="thirty"), config=config)
-  print(retry["__interrupt__"])  # -> [Interrupt(value="'thirty'不是有效的年龄...", ...)]
+checkpointer = SqliteSaver(sqlite3.connect("forms.db"))
+graph = builder.compile(checkpointer=checkpointer)
 
-  # 提供有效数据；循环退出并更新状态
-  final = graph.invoke(Command(resume=30), config=config)
-  print(final["age"])  # -> 30
-  ```
-</Accordion>
+config = {"configurable": {"thread_id": "form-1"}}
+first = graph.invoke({"age": None}, config=config)
+print(first["__interrupt__"])  # -> [Interrupt(value='您的年龄是多少？', ...)]
+
+# 提供无效数据；节点会重新提示
+retry = graph.invoke(Command(resume="thirty"), config=config)
+print(retry["__interrupt__"])  # -> [Interrupt(value="'thirty'不是有效的年龄...", ...)]
+
+# 提供有效数据；循环退出并更新状态
+final = graph.invoke(Command(resume=30), config=config)
+print(final["age"])  # -> 30
+```
 
 ## 中断的规则
 
@@ -442,33 +436,32 @@ def get_age_node(state: State):
 * ✅ 将[`interrupt`](https://reference.langchain.com/python/langgraph/types/#langgraph.types.interrupt)调用与容易出错的代码分开
 * ✅ 在try/except块中使用特定的异常类型
 
-<CodeGroup>
-  ```python 分离逻辑 theme={null}
-  def node_a(state: State):
-      # ✅ 好：先中断，然后单独处理错误情况
-      interrupt("您的名字是什么？")
-      try:
-          fetch_data()  # 这可能会失败
-      except Exception as e:
-          print(e)
-      return state
-  ```
 
-  ```python 显式异常处理 theme={null}
-  def node_a(state: State):
-      # ✅ 好：捕获特定的异常类型不会捕获中断异常
-      try:
-          name = interrupt("您的名字是什么？")
-          fetch_data()  # 这可能会失败
-      except NetworkException as e:
-          print(e)
-      return state
-  ```
-</CodeGroup>
+```python
+def node_a(state: State):
+    # ✅ 好：先中断，然后单独处理错误情况
+    interrupt("您的名字是什么？")
+    try:
+        fetch_data()  # 这可能会失败
+    except Exception as e:
+        print(e)
+    return state
+```
+
+```python 显式异常处理 theme={null}
+def node_a(state: State):
+    # ✅ 好：捕获特定的异常类型不会捕获中断异常
+    try:
+        name = interrupt("您的名字是什么？")
+        fetch_data()  # 这可能会失败
+    except NetworkException as e:
+        print(e)
+    return state
+```
 
 * 🔴 不要将[`interrupt`](https://reference.langchain.com/python/langgraph/types/#langgraph.types.interrupt)调用包装在裸try/except块中
 
-```python  theme={null}
+```python
 def node_a(state: State):
     # ❌ 不好：将中断包装在裸try/except中会捕获中断异常
     try:
@@ -486,7 +479,7 @@ def node_a(state: State):
 
 * ✅ 在节点执行过程中保持[`interrupt`](https://reference.langchain.com/python/langgraph/types/#langgraph.types.interrupt)调用的一致性
 
-```python  theme={null}
+```python
 def node_a(state: State):
     # ✅ 好：中断调用每次都以相同的顺序发生
     name = interrupt("您的名字是什么？")
@@ -503,23 +496,22 @@ def node_a(state: State):
 * 🔴 不要在节点内有条件地跳过[`interrupt`](https://reference.langchain.com/python/langgraph/types/#langgraph.types.interrupt)调用
 * 🔴 不要使用在执行之间不是确定性的逻辑来循环[`interrupt`](https://reference.langchain.com/python/langgraph/types/#langgraph.types.interrupt)调用
 
-<CodeGroup>
-  ```python 跳过中断 theme={null}
-  def node_a(state: State):
-      # ❌ 不好：有条件地跳过中断会改变顺序
-      name = interrupt("您的名字是什么？")
+```python
+def node_a(state: State):
+    # ❌ 不好：有条件地跳过中断会改变顺序
+    name = interrupt("您的名字是什么？")
 
-      # 在第一次运行时，这可能会跳过中断
-      # 在恢复时，它可能不会跳过 - 导致索引不匹配
-      if state.get("needs_age"):
-          age = interrupt("您的年龄是多少？")
+    # 在第一次运行时，这可能会跳过中断
+    # 在恢复时，它可能不会跳过 - 导致索引不匹配
+    if state.get("needs_age"):
+        age = interrupt("您的年龄是多少？")
 
-      city = interrupt("您的城市是什么？")
+    city = interrupt("您的城市是什么？")
 
-      return {"name": name, "city": city}
-  ```
+    return {"name": name, "city": city}
+```
 
-  ```python 循环中断 theme={null}
+```python
   def node_a(state: State):
       # ❌ 不好：基于非确定性数据进行循环
       # 中断数量在执行之间会变化
@@ -529,8 +521,7 @@ def node_a(state: State):
           results.append(result)
 
       return {"results": results}
-  ```
-</CodeGroup>
+```
 
 ### 不要在`interrupt`调用中返回复杂值
 
@@ -539,64 +530,60 @@ def node_a(state: State):
 * ✅ 将简单的、可JSON序列化的类型传递给[`interrupt`](https://reference.langchain.com/python/langgraph/types/#langgraph.types.interrupt)
 * ✅ 传递带有简单值的字典/对象
 
-<CodeGroup>
-  ```python 简单值 theme={null}
-  def node_a(state: State):
-      # ✅ 好：传递可序列化的简单类型
-      name = interrupt("您的名字是什么？")
-      count = interrupt(42)
-      approved = interrupt(True)
+```python
+def node_a(state: State):
+    # ✅ 好：传递可序列化的简单类型
+    name = interrupt("您的名字是什么？")
+    count = interrupt(42)
+    approved = interrupt(True)
 
-      return {"name": name, "count": count, "approved": approved}
-  ```
+    return {"name": name, "count": count, "approved": approved}
+```
 
-  ```python 结构化数据 theme={null}
-  def node_a(state: State):
-      # ✅ 好：传递带有简单值的字典
-      response = interrupt({
-          "question": "输入用户详细信息",
-          "fields": ["name", "email", "age"],
-          "current_values": state.get("user", {})
-      })
+```python
+def node_a(state: State):
+    # ✅ 好：传递带有简单值的字典
+    response = interrupt({
+        "question": "输入用户详细信息",
+        "fields": ["name", "email", "age"],
+        "current_values": state.get("user", {})
+    })
 
-      return {"user": response}
-  ```
-</CodeGroup>
+    return {"user": response}
+```
 
 * 🔴 不要将函数、类实例或其他复杂对象传递给[`interrupt`](https://reference.langchain.com/python/langgraph/types/#langgraph.types.interrupt)
 
-<CodeGroup>
-  ```python 函数 theme={null}
-  def validate_input(value):
-      return len(value) > 0
+```python
+def validate_input(value):
+    return len(value) > 0
 
-  def node_a(state: State):
-      # ❌ 不好：将函数传递给中断
-      # 该函数无法被序列化
-      response = interrupt({
-          "question": "您的名字是什么？",
-          "validator": validate_input  # 这将失败
-      })
-      return {"name": response}
-  ```
+def node_a(state: State):
+    # ❌ 不好：将函数传递给中断
+    # 该函数无法被序列化
+    response = interrupt({
+        "question": "您的名字是什么？",
+        "validator": validate_input  # 这将失败
+    })
+    return {"name": response}
+```
 
-  ```python 类实例 theme={null}
-  class DataProcessor:
-      def __init__(self, config):
-          self.config = config
+```python
+class DataProcessor:
+    def __init__(self, config):
+        self.config = config
 
-  def node_a(state: State):
-      processor = DataProcessor({"mode": "strict"})
+def node_a(state: State):
+    processor = DataProcessor({"mode": "strict"})
 
-      # ❌ 不好：将类实例传递给中断
-      # 该实例无法被序列化
-      response = interrupt({
-          "question": "输入要处理的数据",
-          "processor": processor  # 这将失败
-      })
-      return {"result": response}
-  ```
-</CodeGroup>
+    # ❌ 不好：将类实例传递给中断
+    # 该实例无法被序列化
+    response = interrupt({
+        "question": "输入要处理的数据",
+        "processor": processor  # 这将失败
+    })
+    return {"result": response}
+```
 
 ### 在`interrupt`之前调用的副作用必须是幂等的
 
@@ -608,92 +595,87 @@ def node_a(state: State):
 * ✅ 将副作用放在[`interrupt`](https://reference.langchain.com/python/langgraph/types/#langgraph.types.interrupt)调用之后
 * ✅ 尽可能将副作用分离到单独的节点中
 
-<CodeGroup>
-  ```python 幂等操作 theme={null}
-  def node_a(state: State):
-      # ✅ 好：使用upsert操作，这是幂等的
-      # 多次运行此操作将产生相同的结果
-      db.upsert_user(
-          user_id=state["user_id"],
-          status="pending_approval"
-      )
 
-      approved = interrupt("批准此更改？")
+```python
+def node_a(state: State):
+    # ✅ 好：使用upsert操作，这是幂等的
+    # 多次运行此操作将产生相同的结果
+    db.upsert_user(
+        user_id=state["user_id"],
+        status="pending_approval"
+    )
 
-      return {"approved": approved}
-  ```
+    approved = interrupt("批准此更改？")
 
-  ```python 中断后的副作用 theme={null}
-  def node_a(state: State):
-      # ✅ 好：将副作用放在中断之后
-      # 这确保它只在收到批准后运行一次
-      approved = interrupt("批准此更改？")
+    return {"approved": approved}
+```
 
-      if approved:
-          db.create_audit_log(
-              user_id=state["user_id"],
-              action="approved"
-          )
+```python
+def node_a(state: State):
+    # ✅ 好：将副作用放在中断之后
+    # 这确保它只在收到批准后运行一次
+    approved = interrupt("批准此更改？")
 
-      return {"approved": approved}
-  ```
+    if approved:
+        db.create_audit_log(
+            user_id=state["user_id"],
+            action="approved"
+        )
 
-  ```python 分离到不同节点 theme={null}
-  def approval_node(state: State):
-      # ✅ 好：仅在此节点中处理中断
-      approved = interrupt("批准此更改？")
+    return {"approved": approved}
+```
 
-      return {"approved": approved}
+```python
+def approval_node(state: State):
+    # ✅ 好：仅在此节点中处理中断
+    approved = interrupt("批准此更改？")
 
-  def notification_node(state: State):
-      # ✅ 好：副作用发生在单独的节点中
-      # 这在批准后运行，所以它只执行一次
-      if (state.approved):
-          send_notification(
-              user_id=state["user_id"],
-              status="approved"
-          )
+    return {"approved": approved}
 
-      return state
-  ```
-</CodeGroup>
+def notification_node(state: State):
+    # ✅ 好：副作用发生在单独的节点中
+    # 这在批准后运行，所以它只执行一次
+    if (state.approved):
+        send_notification(
+            user_id=state["user_id"],
+            status="approved"
+        )
+
+    return state
+```
 
 * 🔴 不要在[`interrupt`](https://reference.langchain.com/python/langgraph/types/#langgraph.types.interrupt)之前执行非幂等操作
 * 🔴 不要在不检查它们是否存在的情况下创建新记录
 
-<CodeGroup>
-  ```python 创建记录 theme={null}
-  def node_a(state: State):
-      # ❌ 不好：在中断之前创建新记录
-      # 这会在每次恢复时创建重复记录
-      audit_id = db.create_audit_log({
-          "user_id": state["user_id"],
-          "action": "pending_approval",
-          "timestamp": datetime.now()
-      })
+```python
+def node_a(state: State):
+    # ❌ 不好：在中断之前创建新记录
+    # 这会在每次恢复时创建重复记录
+    audit_id = db.create_audit_log({
+        "user_id": state["user_id"],
+        "action": "pending_approval",
+        "timestamp": datetime.now()
+    })
 
-      approved = interrupt("批准此更改？")
+    approved = interrupt("批准此更改？")
 
-      return {"approved": approved, "audit_id": audit_id}
-  ```
+    return {"approved": approved, "audit_id": audit_id}
+```
 
-  ```python 追加到列表 theme={null}
-  def node_a(state: State):
-      # ❌ 不好：在中断之前追加到列表
-      # 这会在每次恢复时添加重复条目
-      db.append_to_history(state["user_id"], "approval_requested")
-
-      approved = interrupt("批准此更改？")
-
-      return {"approved": approved}
-  ```
-</CodeGroup>
+```python
+def node_a(state: State):
+# ❌ 不好：在中断之前追加到列表
+# 这会在每次恢复时添加重复条目
+db.append_to_history(state["user_id"], "approval_requested")
+approved = interrupt("批准此更改？")
+return {"approved": approved}
+```
 
 ## 在作为函数调用的子图中使用
 
 在节点内调用子图时，父图将从调用子图和触发[`interrupt`](https://reference.langchain.com/python/langgraph/types/#langgraph.types.interrupt)的**节点的开头**恢复执行。类似地，**子图**也将从调用[`interrupt`](https://reference.langchain.com/python/langgraph/types/#langgraph.types.interrupt)的节点的开头恢复。
 
-```python  theme={null}
+```python
 def node_in_parent_graph(state: State):
     some_code()  # <-- 恢复时这将重新执行
     # 作为函数调用子图
@@ -711,68 +693,65 @@ async function node_in_subgraph(state: State) {
 
 要调试和测试图，您可以使用静态中断作为断点，一次一个节点地逐步执行图执行。静态中断在定义的点触发，可以在节点执行之前或之后。您可以通过在编译图时指定`interrupt_before`和`interrupt_after`来设置这些。
 
-<Note>
-  不建议将静态中断用于人机交互工作流。请改用[`interrupt`](https://reference.langchain.com/python/langgraph/types/#langgraph.types.interrupt)方法。
-</Note>
+> 不建议将静态中断用于人机交互工作流。请改用[`interrupt`](https://reference.langchain.com/python/langgraph/types/#langgraph.types.interrupt)方法。
 
-<Tabs>
-  <Tab title="编译时">
-    ```python  theme={null}
-    graph = builder.compile(
-        interrupt_before=["node_a"],  # [!code highlight]
-        interrupt_after=["node_b", "node_c"],  # [!code highlight]
-        checkpointer=checkpointer,
-    )
+**编译时**
+ ```python
+ graph = builder.compile(
+     interrupt_before=["node_a"],  # [!code highlight]
+     interrupt_after=["node_b", "node_c"],  # [!code highlight]
+     checkpointer=checkpointer,
+ )
 
-    # 将线程ID传递给图
-    config = {
-        "configurable": {
-            "thread_id": "some_thread"
-        }
+ # 将线程ID传递给图
+ config = {
+     "configurable": {
+         "thread_id": "some_thread"
+     }
+ }
+
+ # 运行图直到断点
+ graph.invoke(inputs, config=config)  # [!code highlight]
+
+ # 恢复图
+ graph.invoke(None, config=config)  # [!code highlight]
+ ```
+
+ 1. 断点在`compile`时设置。
+ 2. `interrupt_before`指定应在执行节点之前暂停执行的节点。
+ 3. `interrupt_after`指定应在执行节点之后暂停执行的节点。
+ 4. 需要检查点才能启用断点。
+ 5. 图运行直到遇到第一个断点。
+ 6. 通过为输入传递`None`来恢复图。这将运行图直到遇到下一个断点。
+
+
+**运行时**
+
+```python
+config = {
+    "configurable": {
+        "thread_id": "some_thread"
     }
+}
 
-    # 运行图直到断点
-    graph.invoke(inputs, config=config)  # [!code highlight]
+# 运行图直到断点
+graph.invoke(
+    inputs,
+    interrupt_before=["node_a"],  # [!code highlight]
+    interrupt_after=["node_b", "node_c"],  # [!code highlight]
+    config=config,
+)
 
-    # 恢复图
-    graph.invoke(None, config=config)  # [!code highlight]
-    ```
+# 恢复图
+graph.invoke(None, config=config)  # [!code highlight]
+```
 
-    1. 断点在`compile`时设置。
-    2. `interrupt_before`指定应在执行节点之前暂停执行的节点。
-    3. `interrupt_after`指定应在执行节点之后暂停执行的节点。
-    4. 需要检查点才能启用断点。
-    5. 图运行直到遇到第一个断点。
-    6. 通过为输入传递`None`来恢复图。这将运行图直到遇到下一个断点。
-  </Tab>
+1. `graph.invoke`使用`interrupt_before`和`interrupt_after`参数调用。这是一个运行时配置，可以为每次调用更改。
+2. `interrupt_before`指定应在执行节点之前暂停执行的节点。
+3. `interrupt_after`指定应在执行节点之后暂停执行的节点。
+4. 图运行直到遇到第一个断点。
+5. 通过为输入传递`None`来恢复图。这将运行图直到遇到下一个断点。
 
-  <Tab title="运行时">
-    ```python  theme={null}
-    config = {
-        "configurable": {
-            "thread_id": "some_thread"
-        }
-    }
-
-    # 运行图直到断点
-    graph.invoke(
-        inputs,
-        interrupt_before=["node_a"],  # [!code highlight]
-        interrupt_after=["node_b", "node_c"],  # [!code highlight]
-        config=config,
-    )
-
-    # 恢复图
-    graph.invoke(None, config=config)  # [!code highlight]
-    ```
-
-    1. `graph.invoke`使用`interrupt_before`和`interrupt_after`参数调用。这是一个运行时配置，可以为每次调用更改。
-    2. `interrupt_before`指定应在执行节点之前暂停执行的节点。
-    3. `interrupt_after`指定应在执行节点之后暂停执行的节点。
-    4. 图运行直到遇到第一个断点。
-    5. 通过为输入传递`None`来恢复图。这将运行图直到遇到下一个断点。
-  </Tab>
-</Tabs>
 
 ### 使用LangGraph Studio
 
@@ -782,10 +761,6 @@ async function node_in_subgraph(state: State) {
 
 ***
 
-<Callout icon="pen-to-square" iconType="regular">
-  [在GitHub上编辑此页面的源代码。](https://github.com/langchain-ai/docs/edit/main/src/oss/langgraph/interrupts.mdx)
-</Callout>
+[在GitHub上编辑此页面的源代码。](https://github.com/langchain-ai/docs/edit/main/src/oss/langgraph/interrupts.mdx)
 
-<Tip icon="terminal" iconType="regular">
-  [通过MCP将这些文档以编程方式连接](/use-these-docs)到Claude、VSCode等，以获取实时答案。
-</Tip>
+[通过MCP将这些文档以编程方式连接](/use-these-docs)到Claude、VSCode等，以获取实时答案。
