@@ -478,35 +478,36 @@ def send_reply(state: EmailAgentState) -> dict:
 **图编译代码**
 
 ```python
-  from langgraph.checkpoint.memory import MemorySaver
-  from langgraph.types import RetryPolicy
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.types import RetryPolicy
 
-  # 创建图
-  workflow = StateGraph(EmailAgentState)
+# 创建图
+workflow = StateGraph(EmailAgentState)
 
-  # 添加具有适当错误处理的节点
-  workflow.add_node("read_email", read_email)
-  workflow.add_node("classify_intent", classify_intent)
+# 添加具有适当错误处理的节点
+workflow.add_node("read_email", read_email)
+workflow.add_node("classify_intent", classify_intent)
 
-  # 为可能有暂时性故障的节点添加重试策略
-  workflow.add_node(
-      "search_documentation",
-      search_documentation,
-      retry_policy=RetryPolicy(max_attempts=3)
-  )
-  workflow.add_node("bug_tracking", bug_tracking)
-  workflow.add_node("draft_response", draft_response)
-  workflow.add_node("human_review", human_review)
-  workflow.add_node("send_reply", send_reply)
+# 为可能有暂时性故障的节点添加重试策略
+workflow.add_node(
+    "search_documentation",
+    search_documentation,
+    retry_policy=RetryPolicy(max_attempts=3)
+)
 
-  # 只添加基本边
-  workflow.add_edge(START, "read_email")
-  workflow.add_edge("read_email", "classify_intent")
-  workflow.add_edge("send_reply", END)
+workflow.add_node("bug_tracking", bug_tracking)
+workflow.add_node("draft_response", draft_response)
+workflow.add_node("human_review", human_review)
+workflow.add_node("send_reply", send_reply)
 
-  # 使用检查点程序编译以实现持久性，以防运行图时使用Local_Server --> 请在没有检查点程序的情况下编译
-  memory = MemorySaver()
-  app = workflow.compile(checkpointer=memory)
+# 只添加基本边
+workflow.add_edge(START, "read_email")
+workflow.add_edge("read_email", "classify_intent")
+workflow.add_edge("send_reply", END)
+
+# 使用检查点程序编译以实现持久性，以防运行图时使用Local_Server --> 请在没有检查点程序的情况下编译
+memory = MemorySaver()
+app = workflow.compile(checkpointer=memory)
 ```
 
 图结构是最小的，因为路由通过[`Command`](https://reference.langchain.com/python/langgraph/types/#langgraph.types.Command)对象在节点内部发生。每个节点使用像`Command[Literal["node1", "node2"]]`这样的类型提示声明它可以去哪里，这使得流程明确且可追踪。
@@ -517,33 +518,33 @@ def send_reply(state: EmailAgentState) -> dict:
 
 **测试Agent**
 ```python
-  # 使用需要人工审核的紧急计费问题进行测试
-  initial_state = {
-      "email_content": "我的订阅被扣费了两次！这很紧急！",
-      "sender_email": "customer@example.com",
-      "email_id": "email_123",
-      "messages": []
-  }
+# 使用需要人工审核的紧急计费问题进行测试
+initial_state = {
+    "email_content": "我的订阅被扣费了两次！这很紧急！",
+    "sender_email": "customer@example.com",
+    "email_id": "email_123",
+    "messages": []
+}
 
-  # 使用thread_id进行持久化运行
-  config = {"configurable": {"thread_id": "customer_123"}}
-  result = app.invoke(initial_state, config)
-  # 图将在人工审核时暂停
-  print(f"草稿准备好审核: {result['draft_response'][:100]}...")
+# 使用thread_id进行持久化运行
+config = {"configurable": {"thread_id": "customer_123"}}
+result = app.invoke(initial_state, config)
+# 图将在人工审核时暂停
+print(f"草稿准备好审核: {result['draft_response'][:100]}...")
 
-  # 当准备好时，提供人工输入以恢复
-  from langgraph.types import Command
+# 当准备好时，提供人工输入以恢复
+from langgraph.types import Command
 
-  human_response = Command(
-      resume={
-          "approved": True,
-          "edited_response": "我们对重复收费深表歉意。我已经立即启动了退款..."
-      }
-  )
+human_response = Command(
+    resume={
+        "approved": True,
+        "edited_response": "我们对重复收费深表歉意。我已经立即启动了退款..."
+    }
+)
 
-  # 恢复执行
-  final_result = app.invoke(human_response, config)
-  print(f"邮件发送成功！")
+# 恢复执行
+final_result = app.invoke(human_response, config)
+print(f"邮件发送成功！")
 ```
 
 当图遇到`interrupt()`时暂停，将所有内容保存到检查点程序，并等待。它可以几天后恢复，从停止的地方精确地继续。`thread_id`确保此对话的所有状态都一起保留。
