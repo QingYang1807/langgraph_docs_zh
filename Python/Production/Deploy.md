@@ -17,23 +17,22 @@ LangSmith 是将智能体投入生产系统的最快方式。传统托管平台�
 
 ### 2. 部署到 LangSmith
 
-<Steps>
-  <Step title="导航到 LangSmith 部署">
-    登录 [LangSmith](https://smith.langchain.com/)。在左侧边栏中，选择 **Deployments**（部署）。
-  </Step>
+**导航到 LangSmith 部署**
 
-  <Step title="创建新部署">
-    点击 **+ New Deployment**（+ 新部署）按钮。将打开一个面板，您可以在其中填写必填字段。
-  </Step>
+登录 [LangSmith](https://smith.langchain.com/)。在左侧边栏中，选择 **Deployments**（部署）。
 
-  <Step title="链接仓库">
-    如果您是首次用户或添加之前未连接过的私有仓库，请点击 **Add new account**（添加新账户）按钮并按照说明连接您的 GitHub 账户。
-  </Step>
+**创建新部署**
 
-  <Step title="部署仓库">
-    选择您应用程序的仓库。点击 **Submit**（提交）进行部署。这可能需要大约 15 分钟完成。您可以在 **Deployment details**（部署详情）视图中检查状态。
-  </Step>
-</Steps>
+点击 **+ New Deployment**（+ 新部署）按钮。将打开一个面板，您可以在其中填写必填字段。
+
+**链接仓库**
+
+如果您是首次用户或添加之前未连接过的私有仓库，请点击 **Add new account**（添加新账户）按钮并按照说明连接您的 GitHub 账户。
+
+**部署仓库**
+
+选择您应用程序的仓库。点击 **Submit**（提交）进行部署。这可能需要大约 15 分钟完成。您可以在 **Deployment details**（部署详情）视图中检查状态。
+
 
 ### 3. 在 Studio 中测试您的应用程序
 
@@ -51,70 +50,60 @@ LangSmith 是将智能体投入生产系统的最快方式。传统托管平台�
 
 现在您可以测试 API：
 
-<Tabs>
-  <Tab title="Python">
-    1. 安装 LangGraph Python：
+**Python**
+1. 安装 LangGraph Python：
 
-    ```shell  theme={null}
-    pip install langgraph-sdk
-    ```
+```shell
+pip install langgraph-sdk
+```
 
-    2. 向智能体发送消息：
+2. 向智能体发送消息：
 
-    ```python  theme={null}
-    from langgraph_sdk import get_sync_client # 或使用 get_client 进行异步操作
+```python
+from langgraph_sdk import get_sync_client # 或使用 get_client 进行异步操作
 
-    client = get_sync_client(url="your-deployment-url", api_key="your-langsmith-api-key")
+client = get_sync_client(url="your-deployment-url", api_key="your-langsmith-api-key")
 
-    for chunk in client.runs.stream(
-        None,    # 无线程运行
-        "agent", # 智能体名称。在 langgraph.json 中定义。
-        input={
-            "messages": [{
-                "role": "human",
-                "content": "What is LangGraph?",
-            }],
+for chunk in client.runs.stream(
+    None,    # 无线程运行
+    "agent", # 智能体名称。在 langgraph.json 中定义。
+    input={
+        "messages": [{
+            "role": "human",
+            "content": "What is LangGraph?",
+        }],
+    },
+    stream_mode="updates",
+):
+    print(f"Receiving new event of type: {chunk.event}...")
+    print(chunk.data)
+    print("\n\n")
+```
+
+**Rest API**
+```bash
+curl -s --request POST \
+    --url <DEPLOYMENT_URL>/runs/stream \
+    --header 'Content-Type: application/json' \
+    --header "X-Api-Key: <LANGSMITH API KEY> \
+    --data "{
+        \"assistant_id\": \"agent\", `# 智能体名称。在 langgraph.json 中定义。`
+        \"input\": {
+            \"messages\": [
+                {
+                    \"role\": \"human\",
+                    \"content\": \"What is LangGraph?\"
+                }
+            ]
         },
-        stream_mode="updates",
-    ):
-        print(f"Receiving new event of type: {chunk.event}...")
-        print(chunk.data)
-        print("\n\n")
-    ```
-  </Tab>
+        \"stream_mode\": \"updates\"
+    }"
+```
 
-  <Tab title="Rest API">
-    ```bash  theme={null}
-    curl -s --request POST \
-        --url <DEPLOYMENT_URL>/runs/stream \
-        --header 'Content-Type: application/json' \
-        --header "X-Api-Key: <LANGSMITH API KEY> \
-        --data "{
-            \"assistant_id\": \"agent\", `# 智能体名称。在 langgraph.json 中定义。`
-            \"input\": {
-                \"messages\": [
-                    {
-                        \"role\": \"human\",
-                        \"content\": \"What is LangGraph?\"
-                    }
-                ]
-            },
-            \"stream_mode\": \"updates\"
-        }"
-    ```
-  </Tab>
-</Tabs>
-
-<Tip>
-  LangSmith 提供额外的托管选项，包括自托管和混合托管。更多信息，请参见[托管概览](/langsmith/hosting)。
-</Tip>
+> LangSmith 提供额外的托管选项，包括自托管和混合托管。更多信息，请参见[托管概览](/langsmith/hosting)。
 
 ***
 
-<Callout icon="pen-to-square" iconType="regular">
-  [在 GitHub 上编辑本页的源代码。](https://github.com/langchain-ai/docs/edit/main/src/oss/langgraph/deploy.mdx)
-</Callout>
+[在 GitHub 上编辑本页的源代码。](https://github.com/langchain-ai/docs/edit/main/src/oss/langgraph/deploy.mdx)
 
-<Tip icon="terminal" iconType="regular">
-  [以编程方式连接这些文档](/use-these-docs)，通过 MCP 连接到 Claude、VSCode 等，以获取实时答案。
-</Tip>
+[以编程方式连接这些文档](/use-these-docs)，通过 MCP 连接到 Claude、VSCode 等，以获取实时答案。
