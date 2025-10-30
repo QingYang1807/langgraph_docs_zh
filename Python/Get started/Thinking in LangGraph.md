@@ -1,19 +1,19 @@
 # 用LangGraph思考
 
-> 通过将客户支持邮件代理分解为离散步骤，学习如何构建代理的思维过程
+> 通过将客户支持邮件Agent分解为离散步骤，学习如何构建Agent的思维过程
 
-LangGraph可以改变您构建代理的思维方式。当您使用LangGraph构建代理时，首先需要将其分解称为**节点**的离散步骤。然后，您将为每个节点描述不同的决策和转换。最后，您将通过一个共享的**状态**将节点连接起来，每个节点都可以从中读取和写入。在本教程中，我们将引导您完成使用LangGraph构建客户支持邮件代理的思维过程。
+LangGraph可以改变您构建Agent的思维方式。当您使用LangGraph构建Agent时，首先需要将其分解称为**节点**的离散步骤。然后，您将为每个节点描述不同的决策和转换。最后，您将通过一个共享的**状态**将节点连接起来，每个节点都可以从中读取和写入。在本教程中，我们将引导您完成使用LangGraph构建客户支持邮件Agent的思维过程。
 
 ## 从您想要自动化的流程开始
 
-假设您需要构建一个处理客户支持邮件的AI代理。您的产品团队向您提出了以下要求：
+假设您需要构建一个处理客户支持邮件的AIAgent。您的产品团队向您提出了以下要求：
 
-代理应该：
+Agent应该：
 * 读取传入的客户邮件
 * 根据紧急程度和主题对其进行分类
 * 搜索相关文档以回答问题
 * 起草适当的回复
-* 将复杂问题升级给人工代理
+* 将复杂问题升级给人工Agent
 * 在需要时安排后续跟进
 
 需要处理的示例场景：
@@ -23,13 +23,13 @@ LangGraph可以改变您构建代理的思维方式。当您使用LangGraph构�
 4. 功能请求："您能否为移动应用添加暗黑模式？"
 5. 复杂的技术问题："我们的API集成间歇性地失败，出现504错误"
 
-要在LangGraph中实现代理，您通常遵循相同的五个步骤。
+要在LangGraph中实现Agent，您通常遵循相同的五个步骤。
 
 ## 步骤1：将您的工作流程映射为离散步骤
 
 首先识别您流程中的不同步骤。每个步骤将成为一个**节点**（执行特定功能的函数）。然后绘制这些步骤如何相互连接。
 
-```mermaid  theme={null}
+```mermaid
 flowchart TD
     A[START] --> B[读取邮件]
     B --> C[分类意图]
@@ -57,7 +57,7 @@ flowchart TD
 * **文档搜索**：查询您的知识库以获取相关信息
 * **错误跟踪**：在跟踪系统中创建或更新问题
 * **起草回复**：生成适当的回复
-* **人工审核**：升级给人工代理进行审批或处理
+* **人工审核**：升级给人工Agent进行审批或处理
 * **发送回复**：发送邮件回复
 
 <Tip>
@@ -154,7 +154,7 @@ flowchart TD
 
 ## 步骤3：设计您的状态
 
-状态是代理中所有节点都可访问的共享[内存](/oss/python/concepts/memory)。将其视为代理使用的笔记本，用于跟踪它处理过程中学到和决定的一切。
+状态是Agent中所有节点都可访问的共享[内存](/oss/python/concepts/memory)。将其视为Agent使用的笔记本，用于跟踪它处理过程中学到和决定的一切。
 
 ### 什么应该包含在状态中？
 
@@ -170,7 +170,7 @@ flowchart TD
   </Card>
 </CardGroup>
 
-对于我们的邮件代理，我们需要跟踪：
+对于我们的邮件Agent，我们需要跟踪：
 * 原始邮件和发件人信息（无法重建这些）
 * 分类结果（多个下游节点需要）
 * 搜索结果和客户数据（重新获取成本高）
@@ -187,11 +187,11 @@ flowchart TD
 * 不同的节点可以根据需要以不同方式格式化相同的数据
 * 您可以更改提示模板而无需修改状态架构
 * 调试更清晰 - 您确切地看到每个节点接收了什么数据
-* 您的代理可以在不破坏现有状态的情况下发展
+* 您的Agent可以在不破坏现有状态的情况下发展
 
 让我们定义我们的状态：
 
-```python  theme={null}
+```python
 from typing import TypedDict, Literal
 
 # 定义邮件分类的结构
@@ -240,7 +240,7 @@ class EmailAgentState(TypedDict):
   <Tab title="暂时性错误" icon="rotate">
     添加重试策略以自动重试网络问题和速率限制：
 
-    ```python  theme={null}
+    ```python
     from langgraph.types import RetryPolicy
 
     workflow.add_node(
@@ -254,7 +254,7 @@ class EmailAgentState(TypedDict):
   <Tab title="LLM可恢复" icon="brain">
     将错误存储在状态中并循环回来，以便LLM可以看到出了什么问题并重试：
 
-    ```python  theme={null}
+    ```python
     from langgraph.types import Command
 
 
@@ -274,7 +274,7 @@ class EmailAgentState(TypedDict):
   <Tab title="用户可修复" icon="user">
     当需要时暂停并从用户那里收集信息（如账户ID、订单号或澄清）：
 
-    ```python  theme={null}
+    ```python
     from langgraph.types import Command
 
 
@@ -297,7 +297,7 @@ class EmailAgentState(TypedDict):
   <Tab title="意外" icon="triangle-exclamation">
     让它们冒泡以进行调试。不要捕获您无法处理的内容：
 
-    ```python  theme={null}
+    ```python
     def send_reply(state: EmailAgentState):
         try:
             email_service.send(state["draft_response"])
@@ -307,13 +307,13 @@ class EmailAgentState(TypedDict):
   </Tab>
 </Tabs>
 
-### 实现我们的邮件代理节点
+### 实现我们的邮件Agent节点
 
 我们将每个节点实现为简单函数。记住：节点接收状态，执行工作，然后返回更新。
 
 <AccordionGroup>
   <Accordion title="读取和分类节点" icon="brain">
-    ```python  theme={null}
+    ```python
     from typing import Literal
     from langgraph.graph import StateGraph, START, END
     from langgraph.types import interrupt, Command, RetryPolicy
@@ -367,7 +367,7 @@ class EmailAgentState(TypedDict):
   </Accordion>
 
   <Accordion title="搜索和跟踪节点" icon="database">
-    ```python  theme={null}
+    ```python
     def search_documentation(state: EmailAgentState) -> Command[Literal["draft_response"]]:
         """搜索知识库以获取相关信息"""
 
@@ -409,7 +409,7 @@ class EmailAgentState(TypedDict):
   </Accordion>
 
   <Accordion title="响应节点" icon="pen-to-square">
-    ```python  theme={null}
+    ```python
     def draft_response(state: EmailAgentState) -> Command[Literal["human_review", "send_reply"]]:
         """使用上下文生成响应并根据质量路由"""
 
@@ -500,7 +500,7 @@ class EmailAgentState(TypedDict):
 要启用使用`interrupt()`的[人工参与循环](/oss/python/langgraph/interrupts)，我们需要使用[检查点程序](/oss/python/langgraph/persistence)编译以在运行之间保存状态：
 
 <Accordion title="图编译代码" icon="diagram-project" defaultOpen={true}>
-  ```python  theme={null}
+  ```python
   from langgraph.checkpoint.memory import MemorySaver
   from langgraph.types import RetryPolicy
 
@@ -535,12 +535,12 @@ class EmailAgentState(TypedDict):
 
 图结构是最小的，因为路由通过[`Command`](https://reference.langchain.com/python/langgraph/types/#langgraph.types.Command)对象在节点内部发生。每个节点使用像`Command[Literal["node1", "node2"]]`这样的类型提示声明它可以去哪里，这使得流程明确且可追踪。
 
-### 尝试您的代理
+### 尝试您的Agent
 
-让我们运行我们的代理，处理一个需要人工审核的紧急计费问题：
+让我们运行我们的Agent，处理一个需要人工审核的紧急计费问题：
 
-<Accordion title="测试代理" icon="flask">
-  ```python  theme={null}
+<Accordion title="测试Agent" icon="flask">
+  ```python
   # 使用需要人工审核的紧急计费问题进行测试
   initial_state = {
       "email_content": "我的订阅被扣费了两次！这很紧急！",
@@ -577,7 +577,7 @@ class EmailAgentState(TypedDict):
 
 ### 关键见解
 
-构建此邮件代理向我们展示了LangGraph的思维方式：
+构建此邮件Agent向我们展示了LangGraph的思维方式：
 
 <CardGroup cols={2}>
   <Card title="分解为离散步骤" icon="sitemap" href="#step-1-map-out-your-workflow-as-discrete-steps">
@@ -601,7 +601,7 @@ class EmailAgentState(TypedDict):
   </Card>
 
   <Card title="图结构自然出现" icon="diagram-project" href="#step-5-wire-it-together">
-    您定义基本连接，您的节点处理自己的路由逻辑。这使控制流明确且可追踪 - 您始终可以通过查看当前节点了解您的代理下一步将做什么。
+    您定义基本连接，您的节点处理自己的路由逻辑。这使控制流明确且可追踪 - 您始终可以通过查看当前节点了解您的Agent下一步将做什么。
   </Card>
 </CardGroup>
 
@@ -620,11 +620,11 @@ class EmailAgentState(TypedDict):
 
 **弹性考虑：** LangGraph的[持久执行](/oss/python/langgraph/durable-execution)在节点边界创建检查点。当工作流在中断或故障后恢复时，它从执行停止的节点开始重新执行。较小的节点意味着更频繁的检查点，这意味着如果出现问题，需要重复的工作更少。如果您将多个操作组合到一个大节点中，则该节点附近的故障意味着从该节点的起点重新执行所有内容。
 
-我们为什么为邮件代理选择这种分解：
+我们为什么为邮件Agent选择这种分解：
 
 * **外部服务的隔离：** 文档搜索和错误跟踪是单独的节点，因为它们调用外部API。如果搜索服务慢或失败，我们希望将其与LLM调用隔离。我们可以为这些特定节点添加重试策略，而不影响其他节点。
 
-* **中间可见性：** 将"分类意图"作为自己的节点，让我们可以在采取行动之前检查LLM的决定。这对于调试和监控很有价值 - 您可以确切地看到代理何时以及为何路由到人工审核。
+* **中间可见性：** 将"分类意图"作为自己的节点，让我们可以在采取行动之前检查LLM的决定。这对于调试和监控很有价值 - 您可以确切地看到Agent何时以及为何路由到人工审核。
 
 * **不同的故障模式：** LLM调用、数据库查找和电子邮件发送具有不同的重试策略。单独的节点让您可以独立配置这些。
 
@@ -639,7 +639,7 @@ class EmailAgentState(TypedDict):
 
 ### 接下来去哪里
 
-这是关于使用LangGraph思考构建代理的介绍。您可以在此基础之上扩展：
+这是关于使用LangGraph思考构建Agent的介绍。您可以在此基础之上扩展：
 
 <CardGroup cols={2}>
   <Card title="人工参与循环模式" icon="user-check" href="/oss/python/langgraph/interrupts">
