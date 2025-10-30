@@ -1,271 +1,621 @@
-# LangChain 快速上手（Quickstart 中文版）
+# 快速入门
 
-本教程将带你在几分钟内，从零搭建一个 **可运行的 AI 智能体（Agent）**。
-你将学会如何构建、配置、运行并持续交互一个“具备记忆与工具调用能力”的 LangChain 智能体。
+本快速入门演示如何使用 LangGraph Graph API 或 Functional API 构建一个计算器代理。
 
----
+* 如果你更喜欢将代理定义为节点和边的图，请[使用 Graph API](#use-the-graph-api)。
+* 如果你更喜欢将代理定义为单个函数，请[使用 Functional API](#use-the-functional-api)。
 
-## 🚀 1. 构建基础智能体
+<Tip>
+  有关概念信息，请参阅[Graph API 概览](/oss/python/langgraph/graph-api)和[Functional API 概览](/oss/python/langgraph/functional-api)。
+</Tip>
 
-下面示例展示了最基础的智能体：
+<Info>
+  在此示例中，你需要设置一个[Claude (Anthropic)](https://www.anthropic.com/)账户并获取 API 密钥。然后，在终端中设置 `ANTHROPIC_API_KEY` 环境变量。
+</Info>
 
-* 模型：Claude Sonnet 4.5
-* 工具：天气查询函数
-* 系统提示词：定义 Agent 行为
+<Tabs>
+  <Tab title="使用 Graph API">
+    ## 1. 定义工具和模型
 
-```python
-from langchain.agents import create_agent
+    在本示例中，我们将使用 Claude Sonnet 4.5 模型，并定义加法、乘法和除法的工具。
 
-def get_weather(city: str) -> str:
-    """获取指定城市天气"""
-    return f"It's always sunny in {city}!"
+    ```python  theme={null}
+    from langchain.tools import tool
+    from langchain.chat_models import init_chat_model
 
-agent = create_agent(
-    model="anthropic:claude-sonnet-4-5",
-    tools=[get_weather],
-    system_prompt="You are a helpful assistant",
-)
 
-# 调用智能体
-agent.invoke(
-    {"messages": [{"role": "user", "content": "what is the weather in sf"}]}
-)
-```
+    model = init_chat_model(
+        "anthropic:claude-sonnet-4-5",
+        temperature=0
+    )
 
-> 💡 提示：
-> 本例需在系统环境中设置 Anthropic API Key
->
-> ```bash
-> export ANTHROPIC_API_KEY="your_api_key_here"
-> ```
 
----
+    # 定义工具
+    @tool
+    def multiply(a: int, b: int) -> int:
+        """将 `a` 和 `b` 相乘。
 
-## 🌦️ 2. 构建真实世界智能体（Weather Agent）
+        Args:
+            a: 第一个整数
+            b: 第二个整数
+        """
+        return a * b
 
-接下来，我们将构建一个更完整的天气预报智能体，它具备：
 
-1. **角色提示（System Prompt）**：定义语气与行为；
-2. **外部工具调用（Tools）**：从外部获取数据；
-3. **模型配置（Model Config）**：控制输出一致性；
-4. **结构化输出（Structured Output）**：让响应更可解析；
-5. **记忆能力（Memory）**：让对话具备上下文；
-6. **上下文注入（Context）**：支持用户级个性化。
+    @tool
+    def add(a: int, b: int) -> int:
+        """将 `a` 和 `b` 相加。
 
----
+        Args:
+            a: 第一个整数
+            b: 第二个整数
+        """
+        return a + b
 
-### 🧱 Step 1：定义系统提示（System Prompt）
 
-```python
-SYSTEM_PROMPT = """You are an expert weather forecaster, who speaks in puns.
+    @tool
+    def divide(a: int, b: int) -> float:
+        """将 `a` 除以 `b`。
 
-You have access to two tools:
+        Args:
+            a: 第一个整数
+            b: 第二个整数
+        """
+        return a / b
 
-- get_weather_for_location: use this to get the weather for a specific location
-- get_user_location: use this to get the user's location
 
-If a user asks you for the weather, make sure you know the location.
-If you can tell from the question that they mean wherever they are,
-use the get_user_location tool to find their location."""
-```
+    # 增强 LLM 的工具能力
+    tools = [add, multiply, divide]
+    tools_by_name = {tool.name: tool for tool in tools}
+    model_with_tools = model.bind_tools(tools)
+    ```
 
----
+    ## 2. 定义状态
 
-### 🔧 Step 2：定义工具（Tools）
+    图的状态用于存储消息和 LLM 调用次数。
 
-工具允许模型执行函数调用，与外部系统交互。
+    <Tip>
+      LangGraph 中的状态在代理执行期间会持续存在。
 
-```python
-from dataclasses import dataclass
-from langchain.tools import tool, ToolRuntime
+      使用带有 `operator.add` 的 `Annotated` 类型确保新消息附加到现有列表中，而不是替换它们。
+    </Tip>
 
-@tool
-def get_weather_for_location(city: str) -> str:
-    """获取指定城市天气"""
-    return f"It's always sunny in {city}!"
+    ```python  theme={null}
+    from langchain.messages import AnyMessage
+    from typing_extensions import TypedDict, Annotated
+    import operator
 
-@dataclass
-class Context:
-    """运行时上下文（自定义结构）"""
-    user_id: str
 
-@tool
-def get_user_location(runtime: ToolRuntime[Context]) -> str:
-    """根据用户ID获取位置"""
-    user_id = runtime.context.user_id
-    return "Florida" if user_id == "1" else "SF"
-```
+    class MessagesState(TypedDict):
+        messages: Annotated[list[AnyMessage], operator.add]
+        llm_calls: int
+    ```
 
-> 💡 工具文档（函数名、参数名、说明）会自动被注入模型提示中。
+    ## 3. 定义模型节点
 
----
+    模型节点用于调用 LLM 并决定是否调用工具。
 
-### 🧠 Step 3：配置模型（Model Configuration）
+    ```python  theme={null}
+    from langchain.messages import SystemMessage
 
-```python
-from langchain.chat_models import init_chat_model
 
-model = init_chat_model(
-    "anthropic:claude-sonnet-4-5",
-    temperature=0.5,
-    timeout=10,
-    max_tokens=1000
-)
-```
+    def llm_call(state: dict):
+        """LLM 决定是否调用工具"""
 
----
+        return {
+            "messages": [
+                model_with_tools.invoke(
+                    [
+                        SystemMessage(
+                            content="你是一个有帮助的助手，负责在一组输入上执行算术运算。"
+                        )
+                    ]
+                    + state["messages"]
+                )
+            ],
+            "llm_calls": state.get('llm_calls', 0) + 1
+        }
+    ```
 
-### 📄 Step 4：定义响应结构（Response Format）
+    ## 4. 定义工具节点
 
-```python
-from dataclasses import dataclass
+    工具节点用于调用工具并返回结果。
 
-@dataclass
-class ResponseFormat:
-    """智能体响应结构"""
-    punny_response: str  # 双关语式回应（必填）
-    weather_conditions: str | None = None  # 可选天气详情
-```
+    ```python  theme={null}
+    from langchain.messages import ToolMessage
 
----
 
-### 💾 Step 5：添加记忆（Memory）
+    def tool_node(state: dict):
+        """执行工具调用"""
 
-使用 `InMemorySaver` 在短期内保存上下文对话。
-生产环境中可改为数据库持久化。
+        result = []
+        for tool_call in state["messages"][-1].tool_calls:
+            tool = tools_by_name[tool_call["name"]]
+            observation = tool.invoke(tool_call["args"])
+            result.append(ToolMessage(content=observation, tool_call_id=tool_call["id"]))
+        return {"messages": result}
+    ```
 
-```python
-from langgraph.checkpoint.memory import InMemorySaver
+    ## 5. 定义结束逻辑
 
-checkpointer = InMemorySaver()
-```
+    条件边函数用于根据 LLM 是否进行了工具调用，路由到工具节点或结束。
 
----
+    ```python  theme={null}
+    from typing import Literal
+    from langgraph.graph import StateGraph, START, END
 
-### 🧠 Step 6：创建并运行智能体（Create & Run Agent）
 
-```python
-from langchain.agents import create_agent
+    def should_continue(state: MessagesState) -> Literal["tool_node", END]:
+        """根据 LLM 是否进行工具调用决定是否继续循环或停止"""
 
-agent = create_agent(
-    model=model,
-    system_prompt=SYSTEM_PROMPT,
-    tools=[get_user_location, get_weather_for_location],
-    context_schema=Context,
-    response_format=ResponseFormat,
-    checkpointer=checkpointer
-)
+        messages = state["messages"]
+        last_message = messages[-1]
 
-# 唯一线程ID，用于维持对话
-config = {"configurable": {"thread_id": "1"}}
+        # 如果 LLM 进行了工具调用，则执行操作
+        if last_message.tool_calls:
+            return "tool_node"
 
-response = agent.invoke(
-    {"messages": [{"role": "user", "content": "what is the weather outside?"}]},
-    config=config,
-    context=Context(user_id="1")
-)
+        # 否则，我们停止（回复用户）
+        return END
+    ```
 
-print(response['structured_response'])
-```
+    ## 6. 构建并编译代理
 
-输出示例：
+    代理使用 [`StateGraph`](https://reference.langchain.com/python/langgraph/graphs/#langgraph.graph.state.StateGraph) 类构建，并使用 [`compile`](https://reference.langchain.com/python/langgraph/graphs/#langgraph.graph.state.StateGraph.compile) 方法编译。
 
-```python
-ResponseFormat(
-    punny_response="Florida is still having a 'sun-derful' day!...",
-    weather_conditions="It's always sunny in Florida!"
-)
-```
+    ```python  theme={null}
+    # 构建工作流
+    agent_builder = StateGraph(MessagesState)
 
----
+    # 添加节点
+    agent_builder.add_node("llm_call", llm_call)
+    agent_builder.add_node("tool_node", tool_node)
 
-### 🔁 Step 7：连续对话（Conversation Continuity）
+    # 添加边以连接节点
+    agent_builder.add_edge(START, "llm_call")
+    agent_builder.add_conditional_edges(
+        "llm_call",
+        should_continue,
+        ["tool_node", END]
+    )
+    agent_builder.add_edge("tool_node", "llm_call")
 
-使用相同 `thread_id` 可保持上下文记忆：
+    # 编译代理
+    agent = agent_builder.compile()
 
-```python
-response = agent.invoke(
-    {"messages": [{"role": "user", "content": "thank you!"}]},
-    config=config,
-    context=Context(user_id="1")
-)
+    # 显示代理
+    from IPython.display import Image, display
+    display(Image(agent.get_graph(xray=True).draw_mermaid_png()))
 
-print(response['structured_response'])
-# ResponseFormat(
-#     punny_response="You're 'thund-erfully' welcome!...",
-#     weather_conditions=None
-# )
-```
+    # 调用
+    from langchain.messages import HumanMessage
+    messages = [HumanMessage(content="将 3 和 4 相加。")]
+    messages = agent.invoke({"messages": messages})
+    for m in messages["messages"]:
+        m.pretty_print()
+    ```
 
----
+    恭喜！你已经使用 LangGraph Graph API 构建了你的第一个代理。
 
-## 🧩 完整示例代码
+    <Accordion title="完整代码示例">
+      ```python  theme={null}
+      # 步骤 1: 定义工具和模型
 
-```python
-from dataclasses import dataclass
-from langchain.agents import create_agent
-from langchain.chat_models import init_chat_model
-from langchain.tools import tool, ToolRuntime
-from langgraph.checkpoint.memory import InMemorySaver
+      from langchain.tools import tool
+      from langchain.chat_models import init_chat_model
 
-SYSTEM_PROMPT = """You are an expert weather forecaster, who speaks in puns.
 
-You have access to two tools:
-- get_weather_for_location
-- get_user_location
-"""
+      model = init_chat_model(
+          "anthropic:claude-sonnet-4-5",
+          temperature=0
+      )
 
-@dataclass
-class Context:
-    user_id: str
 
-@tool
-def get_weather_for_location(city: str) -> str:
-    return f"It's always sunny in {city}!"
+      # 定义工具
+      @tool
+      def multiply(a: int, b: int) -> int:
+          """将 `a` 和 `b` 相乘。
 
-@tool
-def get_user_location(runtime: ToolRuntime[Context]) -> str:
-    return "Florida" if runtime.context.user_id == "1" else "SF"
+          Args:
+              a: 第一个整数
+              b: 第二个整数
+          """
+          return a * b
 
-model = init_chat_model("anthropic:claude-sonnet-4-5", temperature=0)
-checkpointer = InMemorySaver()
 
-@dataclass
-class ResponseFormat:
-    punny_response: str
-    weather_conditions: str | None = None
+      @tool
+      def add(a: int, b: int) -> int:
+          """将 `a` 和 `b` 相加。
 
-agent = create_agent(
-    model=model,
-    system_prompt=SYSTEM_PROMPT,
-    tools=[get_user_location, get_weather_for_location],
-    context_schema=Context,
-    response_format=ResponseFormat,
-    checkpointer=checkpointer
-)
+          Args:
+              a: 第一个整数
+              b: 第二个整数
+          """
+          return a + b
 
-config = {"configurable": {"thread_id": "1"}}
-response = agent.invoke(
-    {"messages": [{"role": "user", "content": "what is the weather outside?"}]},
-    config=config,
-    context=Context(user_id="1")
-)
-print(response['structured_response'])
-```
 
----
+      @tool
+      def divide(a: int, b: int) -> float:
+          """将 `a` 除以 `b`。
 
-## 🎯 你现在已经掌握了一个完整可用的 LangChain 智能体！
+          Args:
+              a: 第一个整数
+              b: 第二个整数
+          """
+          return a / b
 
-它可以：
 
-✅ 理解上下文、维持对话状态
-✅ 调用多个外部工具
-✅ 返回结构化输出格式
-✅ 基于用户上下文动态响应
-✅ 支持持久化记忆与多轮交互
+      # 增强 LLM 的工具能力
+      tools = [add, multiply, divide]
+      tools_by_name = {tool.name: tool for tool in tools}
+      model_with_tools = model.bind_tools(tools)
 
----
+      # 步骤 2: 定义状态
 
-✏️ [在 GitHub 上编辑本页](https://github.com/langchain-ai/docs/edit/main/src/oss/langchain/quickstart.mdx)
-💻 [通过 MCP 接入 Claude、VSCode 等工具，实现实时问答](/use-these-docs)
+      from langchain.messages import AnyMessage
+      from typing_extensions import TypedDict, Annotated
+      import operator
+
+
+      class MessagesState(TypedDict):
+          messages: Annotated[list[AnyMessage], operator.add]
+          llm_calls: int
+
+      # 步骤 3: 定义模型节点
+      from langchain.messages import SystemMessage
+
+
+      def llm_call(state: dict):
+          """LLM 决定是否调用工具"""
+
+          return {
+              "messages": [
+                  model_with_tools.invoke(
+                      [
+                          SystemMessage(
+                              content="你是一个有帮助的助手，负责在一组输入上执行算术运算。"
+                          )
+                      ]
+                      + state["messages"]
+                  )
+              ],
+              "llm_calls": state.get('llm_calls', 0) + 1
+          }
+
+
+      # 步骤 4: 定义工具节点
+
+      from langchain.messages import ToolMessage
+
+
+      def tool_node(state: dict):
+          """执行工具调用"""
+
+          result = []
+          for tool_call in state["messages"][-1].tool_calls:
+              tool = tools_by_name[tool_call["name"]]
+              observation = tool.invoke(tool_call["args"])
+              result.append(ToolMessage(content=observation, tool_call_id=tool_call["id"]))
+          return {"messages": result}
+
+      # 步骤 5: 定义决定是否结束的逻辑
+
+      from typing import Literal
+      from langgraph.graph import StateGraph, START, END
+
+
+      # 条件边函数，根据 LLM 是否进行工具调用路由到工具节点或结束
+      def should_continue(state: MessagesState) -> Literal["tool_node", END]:
+          """根据 LLM 是否进行工具调用决定是否继续循环或停止"""
+
+          messages = state["messages"]
+          last_message = messages[-1]
+
+          # 如果 LLM 进行了工具调用，则执行操作
+          if last_message.tool_calls:
+              return "tool_node"
+
+          # 否则，我们停止（回复用户）
+          return END
+
+      # 步骤 6: 构建代理
+
+      # 构建工作流
+      agent_builder = StateGraph(MessagesState)
+
+      # 添加节点
+      agent_builder.add_node("llm_call", llm_call)
+      agent_builder.add_node("tool_node", tool_node)
+
+      # 添加边以连接节点
+      agent_builder.add_edge(START, "llm_call")
+      agent_builder.add_conditional_edges(
+          "llm_call",
+          should_continue,
+          ["tool_node", END]
+      )
+      agent_builder.add_edge("tool_node", "llm_call")
+
+      # 编译代理
+      agent = agent_builder.compile()
+
+
+      from IPython.display import Image, display
+      # 显示代理
+      display(Image(agent.get_graph(xray=True).draw_mermaid_png()))
+
+      # 调用
+      from langchain.messages import HumanMessage
+      messages = [HumanMessage(content="将 3 和 4 相加。")]
+      messages = agent.invoke({"messages": messages})
+      for m in messages["messages"]:
+          m.pretty_print()
+
+      ```
+    </Accordion>
+  </Tab>
+
+  <Tab title="使用 Functional API">
+    ## 1. 定义工具和模型
+
+    在本示例中，我们将使用 Claude Sonnet 4.5 模型，并定义加法、乘法和除法的工具。
+
+    ```python  theme={null}
+    from langchain.tools import tool
+    from langchain.chat_models import init_chat_model
+
+
+    model = init_chat_model(
+        "anthropic:claude-sonnet-4-5",
+        temperature=0
+    )
+
+
+    # 定义工具
+    @tool
+    def multiply(a: int, b: int) -> int:
+        """将 `a` 和 `b` 相乘。
+
+        Args:
+            a: 第一个整数
+            b: 第二个整数
+        """
+        return a * b
+
+
+    @tool
+    def add(a: int, b: int) -> int:
+        """将 `a` 和 `b` 相加。
+
+        Args:
+            a: 第一个整数
+            b: 第二个整数
+        """
+        return a + b
+
+
+    @tool
+    def divide(a: int, b: int) -> float:
+        """将 `a` 除以 `b`。
+
+        Args:
+            a: 第一个整数
+            b: 第二个整数
+        """
+        return a / b
+
+
+    # 增强 LLM 的工具能力
+    tools = [add, multiply, divide]
+      tools_by_name = {tool.name: tool for tool in tools}
+      model_with_tools = model.bind_tools(tools)
+
+      from langgraph.graph import add_messages
+      from langchain.messages import (
+          SystemMessage,
+          HumanMessage,
+          ToolCall,
+      )
+      from langchain_core.messages import BaseMessage
+      from langgraph.func import entrypoint, task
+    ```
+
+    ## 2. 定义模型节点
+
+    模型节点用于调用 LLM 并决定是否调用工具。
+
+    <Tip>
+      [`@task`](https://reference.langchain.com/python/langgraph/func/#langgraph.func.task) 装饰器将函数标记为可以作为代理一部分执行的任务。任务可以在入口点函数中同步或异步调用。
+    </Tip>
+
+    ```python  theme={null}
+    @task
+    def call_llm(messages: list[BaseMessage]):
+        """LLM 决定是否调用工具"""
+        return model_with_tools.invoke(
+            [
+                SystemMessage(
+                    content="你是一个有帮助的助手，负责在一组输入上执行算术运算。"
+                )
+            ]
+            + messages
+        )
+    ```
+
+    ## 3. 定义工具节点
+
+    工具节点用于调用工具并返回结果。
+
+    ```python  theme={null}
+    @task
+    def call_tool(tool_call: ToolCall):
+        """执行工具调用"""
+        tool = tools_by_name[tool_call["name"]]
+        return tool.invoke(tool_call)
+
+    ```
+
+    ## 4. 定义代理
+
+    代理使用 [`@entrypoint`](https://reference.langchain.com/python/langgraph/func/#langgraph.func.entrypoint) 函数构建。
+
+    <Note>
+      在 Functional API 中，你不需要显式定义节点和边，而是在单个函数内编写标准的控制流逻辑（循环、条件语句）。
+    </Note>
+
+    ```python  theme={null}
+    @entrypoint()
+    def agent(messages: list[BaseMessage]):
+        model_response = call_llm(messages).result()
+
+        while True:
+            if not model_response.tool_calls:
+                break
+
+            # 执行工具
+            tool_result_futures = [
+                call_tool(tool_call) for tool_call in model_response.tool_calls
+            ]
+            tool_results = [fut.result() for fut in tool_result_futures]
+            messages = add_messages(messages, [model_response, *tool_results])
+            model_response = call_llm(messages).result()
+
+        messages = add_messages(messages, model_response)
+        return messages
+
+    # 调用
+    messages = [HumanMessage(content="将 3 和 4 相加。")]
+    for chunk in agent.stream(messages, stream_mode="updates"):
+        print(chunk)
+        print("\n")
+    ```
+
+    恭喜！你已经使用 LangGraph Functional API 构建了你的第一个代理。
+
+    <Accordion title="完整代码示例" icon="code">
+      ```python  theme={null}
+      # 步骤 1: 定义工具和模型
+
+      from langchain.tools import tool
+      from langchain.chat_models import init_chat_model
+
+
+      model = init_chat_model(
+          "anthropic:claude-sonnet-4-5",
+          temperature=0
+      )
+
+
+      # 定义工具
+      @tool
+      def multiply(a: int, b: int) -> int:
+          """将 `a` 和 `b` 相乘。
+
+          Args:
+              a: 第一个整数
+              b: 第二个整数
+          """
+          return a * b
+
+
+      @tool
+      def add(a: int, b: int) -> int:
+          """将 `a` 和 `b` 相加。
+
+          Args:
+              a: 第一个整数
+              b: 第二个整数
+          """
+          return a + b
+
+
+      @tool
+      def divide(a: int, b: int) -> float:
+          """将 `a` 除以 `b`。
+
+          Args:
+              a: 第一个整数
+              b: 第二个整数
+          """
+          return a / b
+
+
+      # 增强 LLM 的工具能力
+      tools = [add, multiply, divide]
+      tools_by_name = {tool.name: tool for tool in tools}
+      model_with_tools = model.bind_tools(tools)
+
+      from langgraph.graph import add_messages
+      from langchain.messages import (
+          SystemMessage,
+          HumanMessage,
+          ToolCall,
+      )
+      from langchain_core.messages import BaseMessage
+      from langgraph.func import entrypoint, task
+
+
+      # 步骤 2: 定义模型节点
+
+      @task
+      def call_llm(messages: list[BaseMessage]):
+          """LLM 决定是否调用工具"""
+          return model_with_tools.invoke(
+              [
+                  SystemMessage(
+                      content="你是一个有帮助的助手，负责在一组输入上执行算术运算。"
+                  )
+              ]
+              + messages
+          )
+
+
+      # 步骤 3: 定义工具节点
+
+      @task
+      def call_tool(tool_call: ToolCall):
+          """执行工具调用"""
+          tool = tools_by_name[tool_call["name"]]
+          return tool.invoke(tool_call)
+
+
+      # 步骤 4: 定义代理
+
+      @entrypoint()
+      def agent(messages: list[BaseMessage]):
+          model_response = call_llm(messages).result()
+
+          while True:
+              if not model_response.tool_calls:
+                  break
+
+              # 执行工具
+              tool_result_futures = [
+                  call_tool(tool_call) for tool_call in model_response.tool_calls
+              ]
+              tool_results = [fut.result() for fut in tool_result_futures]
+              messages = add_messages(messages, [model_response, *tool_results])
+              model_response = call_llm(messages).result()
+
+          messages = add_messages(messages, model_response)
+          return messages
+
+      # 调用
+      messages = [HumanMessage(content="将 3 和 4 相加。")]
+      for chunk in agent.stream(messages, stream_mode="updates"):
+          print(chunk)
+          print("\n")
+      ```
+    </Accordion>
+  </Tab>
+</Tabs>
+
+***
+
+<Callout icon="pen-to-square" iconType="regular">
+  [在 GitHub 上编辑此页面的源代码。](https://github.com/langchain-ai/docs/edit/main/src/oss/langgraph/quickstart.mdx)
+</Callout>
+
+<Tip icon="terminal" iconType="regular">
+  [通过 MCP 以编程方式连接这些文档](/use-these-docs)到 Claude、VSCode 等，获取实时答案。
+</Tip>
