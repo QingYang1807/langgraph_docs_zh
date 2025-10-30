@@ -126,31 +126,24 @@ flowchart TD
 
 当一个步骤需要执行外部操作时：
 
-<AccordionGroup>
-  <Accordion title="发送回复节点">
-    * 执行时机：获得批准后（人工或自动）
-    * 重试策略：是，对网络问题使用指数退避
-    * 不应缓存：每次发送都是唯一操作
-  </Accordion>
+1、发送回复节点
+* 执行时机：获得批准后（人工或自动）
+* 重试策略：是，对网络问题使用指数退避
+* 不应缓存：每次发送都是唯一操作
 
-  <Accordion title="错误跟踪节点">
-    * 执行时机：当意图为"错误"时总是执行
-    * 重试策略：是，关键是不要丢失错误报告
-    * 返回：包含在响应中的票证ID
-  </Accordion>
-</AccordionGroup>
+2、错误跟踪节点
+* 执行时机：当意图为"错误"时总是执行
+* 重试策略：是，关键是不要丢失错误报告
+* 返回：包含在响应中的票证ID
 
 ### 用户输入步骤
 
 当一个步骤需要人工干预时：
 
-<AccordionGroup>
-  <Accordion title="人工审核节点">
-    * 决策上下文：原始邮件、草稿回复、紧急程度、分类
-    * 预期输入格式：布尔值加上可选的编辑回复
-    * 触发时机：高紧急程度、复杂问题或质量问题
-  </Accordion>
-</AccordionGroup>
+**人工审核节点**
+* 决策上下文：原始邮件、草稿回复、紧急程度、分类
+* 预期输入格式：布尔值加上可选的编辑回复
+* 触发时机：高紧急程度、复杂问题或质量问题
 
 ## 步骤3：设计您的状态
 
@@ -160,15 +153,10 @@ flowchart TD
 
 对每条数据问自己这些问题：
 
-<CardGroup cols={2}>
-  <Card title="包含在状态中" icon="check">
-    它是否需要跨步骤持久存在？如果是，则将其放入状态中。
-  </Card>
-
-  <Card title="不存储" icon="code">
-    您可以从其他数据派生它吗？如果是，则按需计算而不是存储在状态中。
-  </Card>
-</CardGroup>
+- **包含在状态中**
+它是否需要跨步骤持久存在？如果是，则将其放入状态中。
+- **不存储**
+您可以从其他数据派生它吗？如果是，则按需计算而不是存储在状态中。
 
 对于我们的邮件Agent，我们需要跟踪：
 * 原始邮件和发件人信息（无法重建这些）
@@ -179,9 +167,7 @@ flowchart TD
 
 ### 保持状态原始，按需格式化提示
 
-<Tip>
-  一个关键原则：您的状态应该存储原始数据，而不是格式化文本。在需要时在节点内部格式化提示。
-</Tip>
+> 一个关键原则：您的状态应该存储原始数据，而不是格式化文本。在需要时在节点内部格式化提示。
 
 这种分离意味着：
 * 不同的节点可以根据需要以不同方式格式化相同的数据
@@ -311,9 +297,8 @@ class EmailAgentState(TypedDict):
 
 我们将每个节点实现为简单函数。记住：节点接收状态，执行工作，然后返回更新。
 
-<AccordionGroup>
-  <Accordion title="读取和分类节点" icon="brain">
-    ```python
+**读取和分类节点**
+```python
     from typing import Literal
     from langgraph.graph import StateGraph, START, END
     from langgraph.types import interrupt, Command, RetryPolicy
@@ -363,11 +348,10 @@ class EmailAgentState(TypedDict):
             update={"classification": classification},
             goto=goto
         )
-    ```
-  </Accordion>
+```
 
-  <Accordion title="搜索和跟踪节点" icon="database">
-    ```python
+**搜索和跟踪节点**
+```python
     def search_documentation(state: EmailAgentState) -> Command[Literal["draft_response"]]:
         """搜索知识库以获取相关信息"""
 
@@ -405,11 +389,11 @@ class EmailAgentState(TypedDict):
             },
             goto="draft_response"
         )
-    ```
-  </Accordion>
+```
 
-  <Accordion title="响应节点" icon="pen-to-square">
-    ```python
+**响应节点**
+
+```python
     def draft_response(state: EmailAgentState) -> Command[Literal["human_review", "send_reply"]]:
         """使用上下文生成响应并根据质量路由"""
 
@@ -489,9 +473,7 @@ class EmailAgentState(TypedDict):
         # 与邮件服务集成
         print(f"发送回复: {state['draft_response'][:100]}...")
         return {}
-    ```
-  </Accordion>
-</AccordionGroup>
+```
 
 ## 步骤5：将它们连接起来
 
@@ -499,8 +481,9 @@ class EmailAgentState(TypedDict):
 
 要启用使用`interrupt()`的[人工参与循环](/oss/python/langgraph/interrupts)，我们需要使用[检查点程序](/oss/python/langgraph/persistence)编译以在运行之间保存状态：
 
-<Accordion title="图编译代码" icon="diagram-project" defaultOpen={true}>
-  ```python
+**图编译代码**
+
+```python
   from langgraph.checkpoint.memory import MemorySaver
   from langgraph.types import RetryPolicy
 
@@ -530,8 +513,7 @@ class EmailAgentState(TypedDict):
   # 使用检查点程序编译以实现持久性，以防运行图时使用Local_Server --> 请在没有检查点程序的情况下编译
   memory = MemorySaver()
   app = workflow.compile(checkpointer=memory)
-  ```
-</Accordion>
+```
 
 图结构是最小的，因为路由通过[`Command`](https://reference.langchain.com/python/langgraph/types/#langgraph.types.Command)对象在节点内部发生。每个节点使用像`Command[Literal["node1", "node2"]]`这样的类型提示声明它可以去哪里，这使得流程明确且可追踪。
 
@@ -539,8 +521,8 @@ class EmailAgentState(TypedDict):
 
 让我们运行我们的Agent，处理一个需要人工审核的紧急计费问题：
 
-<Accordion title="测试Agent" icon="flask">
-  ```python
+**测试Agent**
+```python
   # 使用需要人工审核的紧急计费问题进行测试
   initial_state = {
       "email_content": "我的订阅被扣费了两次！这很紧急！",
@@ -568,8 +550,7 @@ class EmailAgentState(TypedDict):
   # 恢复执行
   final_result = app.invoke(human_response, config)
   print(f"邮件发送成功！")
-  ```
-</Accordion>
+```
 
 当图遇到`interrupt()`时暂停，将所有内容保存到检查点程序，并等待。它可以几天后恢复，从停止的地方精确地继续。`thread_id`确保此对话的所有状态都一起保留。
 
@@ -579,44 +560,39 @@ class EmailAgentState(TypedDict):
 
 构建此邮件Agent向我们展示了LangGraph的思维方式：
 
-<CardGroup cols={2}>
-  <Card title="分解为离散步骤" icon="sitemap" href="#step-1-map-out-your-workflow-as-discrete-steps">
-    每个节点都做好一件事。这种分解可以实现流式进度更新、可以暂停和恢复的持久执行，以及清晰的调试，因为您可以在步骤之间检查状态。
-  </Card>
+**分解为离散步骤**
 
-  <Card title="状态是共享内存" icon="database" href="#step-3-design-your-state">
-    存储原始数据，而不是格式化文本。这允许不同的节点以不同方式使用相同的信息。
-  </Card>
+每个节点都做好一件事。这种分解可以实现流式进度更新、可以暂停和恢复的持久执行，以及清晰的调试，因为您可以在步骤之间检查状态。
 
-  <Card title="节点是函数" icon="code" href="#step-4-build-your-nodes">
-    它们接收状态，执行工作，并返回更新。当它们需要做出路由决策时，它们指定状态更新和下一个目的地。
-  </Card>
 
-  <Card title="错误是流程的一部分" icon="triangle-exclamation" href="#handle-errors-appropriately">
-    暂时性故障获得重试，LLM可恢复的错误带着上下文循环回来，用户可解决的问题暂停输入，意外错误冒泡以进行调试。
-  </Card>
+**状态是共享内存**
 
-  <Card title="人工输入是一等公民" icon="user" href="/oss/python/langgraph/interrupts">
-    `interrupt()`函数无限期暂停执行，保存所有状态，并在您提供输入时从停止的地方精确恢复。当与节点中的其他操作结合时，它必须首先出现。
-  </Card>
+存储原始数据，而不是格式化文本。这允许不同的节点以不同方式使用相同的信息。
 
-  <Card title="图结构自然出现" icon="diagram-project" href="#step-5-wire-it-together">
-    您定义基本连接，您的节点处理自己的路由逻辑。这使控制流明确且可追踪 - 您始终可以通过查看当前节点了解您的Agent下一步将做什么。
-  </Card>
-</CardGroup>
+**节点是函数**
+
+它们接收状态，执行工作，并返回更新。当它们需要做出路由决策时，它们指定状态更新和下一个目的地。
+
+**错误是流程的一部分**
+暂时性故障获得重试，LLM可恢复的错误带着上下文循环回来，用户可解决的问题暂停输入，意外错误冒泡以进行调试。
+
+**人工输入是一等公民**
+`interrupt()`函数无限期暂停执行，保存所有状态，并在您提供输入时从停止的地方精确恢复。当与节点中的其他操作结合时，它必须首先出现。
+
+**图结构自然出现**
+您定义基本连接，您的节点处理自己的路由逻辑。这使控制流明确且可追踪 - 您始终可以通过查看当前节点了解您的Agent下一步将做什么。
+
 
 ### 高级考虑
 
-<Accordion title="节点粒度权衡" icon="sliders">
-  <Info>
-    本节探讨了节点粒度设计中的权衡。大多数应用程序可以跳过这一点并使用上面显示的模式。
-  </Info>
+**节点粒度权衡**
+本节探讨了节点粒度设计中的权衡。大多数应用程序可以跳过这一点并使用上面显示的模式。
 
-  您可能会想：为什么不将"读取邮件"和"分类意图"合并到一个节点中？
+您可能会想：为什么不将"读取邮件"和"分类意图"合并到一个节点中？
 
-  或者为什么将文档搜索与起草回复分开？
+或者为什么将文档搜索与起草回复分开？
 
-    答案涉及弹性和可观测性之间的权衡。
+答案涉及弹性和可观测性之间的权衡。
 
 **弹性考虑：** LangGraph的[持久执行](/oss/python/langgraph/durable-execution)在节点边界创建检查点。当工作流在中断或故障后恢复时，它从执行停止的节点开始重新执行。较小的节点意味着更频繁的检查点，这意味着如果出现问题，需要重复的工作更少。如果您将多个操作组合到一个大节点中，则该节点附近的故障意味着从该节点的起点重新执行所有内容。
 
@@ -635,44 +611,37 @@ class EmailAgentState(TypedDict):
 应用程序级考虑：第2节中的缓存讨论（是否缓存搜索结果）是应用程序级决策，而不是LangGraph框架功能。您基于特定要求在节点函数内实现缓存 - LangGraph不规定这一点。
 
 性能考虑：更多节点并不意味着执行速度更慢。LangGraph默认在后台写入检查点（[异步持久性模式](/oss/python/langgraph/durable-execution#durability-modes)），因此您的图继续运行而无需等待检查点完成。这意味着您以最小的性能影响获得频繁的检查点。如果需要，您可以调整此行为 - 使用`"exit"`模式仅在完成时检查点，或使用`"sync"`模式阻塞执行直到每个检查点写入。
-</Accordion>
 
 ### 接下来去哪里
 
 这是关于使用LangGraph思考构建Agent的介绍。您可以在此基础之上扩展：
 
-<CardGroup cols={2}>
-  <Card title="人工参与循环模式" icon="user-check" href="/oss/python/langgraph/interrupts">
-    了解如何在执行前添加工具审批、批量审批和其他模式
-  </Card>
+**人工参与循环模式**
 
-  <Card title="子图" icon="diagram-nested" href="/oss/python/langgraph/use-subgraphs">
-    为复杂的多步操作创建子图
-  </Card>
+了解如何在执行前添加工具审批、批量审批和其他模式
 
-  <Card title="流式传输" icon="tower-broadcast" href="/oss/python/langgraph/streaming">
-    添加流式传输以向用户显示实时进度
-  </Card>
+**子图**
 
-  <Card title="可观测性" icon="chart-line" href="/oss/python/langgraph/observability">
-    使用LangSmith添加可观测性以进行调试和监控
-  </Card>
+为复杂的多步操作创建子图
 
-  <Card title="工具集成" icon="wrench" href="/oss/python/langchain/tools">
-    集成更多工具用于网络搜索、数据库查询和API调用
-  </Card>
+**流式传输**
 
-  <Card title="重试逻辑" icon="rotate" href="/oss/python/langgraph/use-graph-api#add-retry-policies">
-    实现具有指数退重的重试逻辑以处理失败操作
-  </Card>
-</CardGroup>
+添加流式传输以向用户显示实时进度
+
+**可观测性**
+
+使用LangSmith添加可观测性以进行调试和监控
+
+**工具集成**
+
+集成更多工具用于网络搜索、数据库查询和API调用
+
+**重试逻辑**
+
+实现具有指数退重的重试逻辑以处理失败操作
 
 ***
 
-<Callout icon="pen-to-square" iconType="regular">
-  [在GitHub上编辑此页面的源代码。](https://github.com/langchain-ai/docs/edit/main/src/oss/langgraph/thinking-in-langgraph.mdx)
-</Callout>
+[在GitHub上编辑此页面的源代码。](https://github.com/langchain-ai/docs/edit/main/src/oss/langgraph/thinking-in-langgraph.mdx)
 
-<Tip icon="terminal" iconType="regular">
-  [通过MCP以编程方式连接这些文档](/use-these-docs)到Claude、VSCode等，以获得实时答案。
-</Tip>
+[通过MCP以编程方式连接这些文档](/use-these-docs)到Claude、VSCode等，以获得实时答案。
