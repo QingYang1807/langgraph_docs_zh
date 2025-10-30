@@ -91,7 +91,7 @@ class MessagesState(TypedDict):
 
 模型节点用于调用 LLM 并决定是否调用工具。
 
-    ```python
+```python
 from langchain.messages import SystemMessage
 
 
@@ -354,7 +354,7 @@ def divide(a: int, b: int) -> float:
 
     在本示例中，我们将使用 Claude Sonnet 4.5 模型，并定义加法、乘法和除法的工具。
 
-    ```python
+```python
     from langchain.tools import tool
     from langchain.chat_models import init_chat_model
 
@@ -412,7 +412,7 @@ def divide(a: int, b: int) -> float:
       )
       from langchain_core.messages import BaseMessage
       from langgraph.func import entrypoint, task
-    ```
+```
 
     ## 2. 定义模型节点
 
@@ -420,7 +420,7 @@ def divide(a: int, b: int) -> float:
 
 > [`@task`](https://reference.langchain.com/python/langgraph/func/#langgraph.func.task) 装饰器将函数标记为可以作为代理一部分执行的任务。任务可以在入口点函数中同步或异步调用。
 
-    ```python
+```python
     @task
     def call_llm(messages: list[BaseMessage]):
         """LLM 决定是否调用工具"""
@@ -432,20 +432,20 @@ def divide(a: int, b: int) -> float:
             ]
             + messages
         )
-    ```
+```
 
     ## 3. 定义工具节点
 
     工具节点用于调用工具并返回结果。
 
-    ```python
+```python
     @task
     def call_tool(tool_call: ToolCall):
         """执行工具调用"""
         tool = tools_by_name[tool_call["name"]]
         return tool.invoke(tool_call)
 
-    ```
+```
 
     ## 4. 定义代理
 
@@ -455,7 +455,7 @@ def divide(a: int, b: int) -> float:
       在 Functional API 中，你不需要显式定义节点和边，而是在单个函数内编写标准的控制流逻辑（循环、条件语句）。
     </Note>
 
-    ```python
+```python
     @entrypoint()
     def agent(messages: list[BaseMessage]):
         model_response = call_llm(messages).result()
@@ -480,12 +480,12 @@ def divide(a: int, b: int) -> float:
     for chunk in agent.stream(messages, stream_mode="updates"):
         print(chunk)
         print("\n")
-    ```
+```
 
     恭喜！你已经使用 LangGraph Functional API 构建了你的第一个代理。
 
 ## 完整代码示例
-      ```python
+  ```python
       # 步骤 1: 定义工具和模型
 
       from langchain.tools import tool
