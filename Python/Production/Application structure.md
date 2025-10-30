@@ -19,47 +19,42 @@
 
 以下是应用程序目录结构的示例：
 
-<Tabs>
-  <Tab title="Python (requirements.txt)">
-    ```plaintext  theme={null}
-    my-app/
-    ├── my_agent # 所有的项目代码都在这里
-    │   ├── utils # 图的工具
-    │   │   ├── __init__.py
-    │   │   ├── tools.py # 图的工具
-    │   │   ├── nodes.py # 图的节点函数
-    │   │   └── state.py # 图的状态定义
-    │   ├── __init__.py
-    │   └── agent.py # 构建图的代码
-    ├── .env # 环境变量
-    ├── requirements.txt # 包依赖项
-    └── langgraph.json # LangGraph 的配置文件
-    ```
-  </Tab>
+### Python (requirements.txt)
 
-  <Tab title="Python (pyproject.toml)">
-    ```plaintext  theme={null}
-    my-app/
-    ├── my_agent # 所有的项目代码都在这里
-    │   ├── utils # 图的工具
-    │   │   ├── __init__.py
-    │   │   ├── tools.py # 图的工具
-    │   │   ├── nodes.py # 图的节点函数
-    │   │   └── state.py # 图的状态定义
-    │   ├── __init__.py
-    │   └── agent.py # 构建图的代码
-    ├── .env # 环境变量
-    ├── langgraph.json  # LangGraph 的配置文件
-    └── pyproject.toml # 项目的依赖项
-    ```
-  </Tab>
-</Tabs>
+```plaintext
+my-app/
+├── my_agent # 所有的项目代码都在这里
+│   ├── utils # 图的工具
+│   │   ├── __init__.py
+│   │   ├── tools.py # 图的工具
+│   │   ├── nodes.py # 图的节点函数
+│   │   └── state.py # 图的状态定义
+│   ├── __init__.py
+│   └── agent.py # 构建图的代码
+├── .env # 环境变量
+├── requirements.txt # 包依赖项
+└── langgraph.json # LangGraph 的配置文件
+```
 
-<Note>
-  LangGraph 应用程序的目录结构可能因编程语言和使用的包管理器而异。
-</Note>
+### Python (pyproject.toml)
 
-<a id="configuration-file-concepts" />
+```plaintext
+my-app/
+├── my_agent # 所有的项目代码都在这里
+│   ├── utils # 图的工具
+│   │   ├── __init__.py
+│   │   ├── tools.py # 图的工具
+│   │   ├── nodes.py # 图的节点函数
+│   │   └── state.py # 图的状态定义
+│   ├── __init__.py
+│   └── agent.py # 构建图的代码
+├── .env # 环境变量
+├── langgraph.json  # LangGraph 的配置文件
+└── pyproject.toml # 项目的依赖项
+```
+
+> LangGraph 应用程序的目录结构可能因编程语言和使用的包管理器而异。
+
 
 ## 配置文件
 
@@ -67,9 +62,7 @@
 
 有关 JSON 文件中所有支持的键的详细信息，请参阅 [LangGraph 配置文件参考](/langsmith/cli#configuration-file)。
 
-<Tip>
-  [LangGraph CLI](/langsmith/cli) 默认使用当前目录中的 `langgraph.json` 配置文件。
-</Tip>
+> [LangGraph CLI](/langsmith/cli) 默认使用当前目录中的 `langgraph.json` 配置文件。
 
 ### 示例
 
@@ -77,7 +70,7 @@
 * 单个图将从文件 `./your_package/your_file.py` 中的变量 `variable` 加载。
 * 环境变量从 `.env` 文件加载。
 
-```json  theme={null}
+```json
 {
   "dependencies": ["langchain_openai", "./your_package"],
   "graphs": {
@@ -113,10 +106,6 @@ LangGraph 应用程序可能依赖于其他 Python 包。
 
 ***
 
-<Callout icon="pen-to-square" iconType="regular">
-  [在 GitHub 上编辑此页面的源代码。](https://github.com/langchain-ai/docs/edit/main/src/oss/langgraph/application-structure.mdx)
-</Callout>
+[在 GitHub 上编辑此页面的源代码。](https://github.com/langchain-ai/docs/edit/main/src/oss/langgraph/application-structure.mdx)
 
-<Tip icon="terminal" iconType="regular">
-  [以编程方式连接这些文档](/use-these-docs)，通过 MCP 将其连接到 Claude、VSCode 等，以获得实时答案。
-</Tip>
+[以编程方式连接这些文档](/use-these-docs)，通过 MCP 将其连接到 Claude、VSCode 等，以获得实时答案。
